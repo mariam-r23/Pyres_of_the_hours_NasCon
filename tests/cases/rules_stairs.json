@@ -1,0 +1,91 @@
+[
+ {
+  "name": "interact on a stair travels to its arrival slot (interact costs an action)",
+  "level": "FX_stair",
+  "actions": [
+   "move:right",
+   "interact",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 3
+  }
+ },
+ {
+  "name": "walking onto a stair does not travel",
+  "level": "FX_stair_walk",
+  "actions": [
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "interact off a stair is rejected",
+  "level": "FX_stair_walk",
+  "actions": [
+   "interact"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "not_on_stair",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "stairs are one way unless a return stair exists",
+  "level": "FX_stair_oneway",
+  "actions": [
+   "interact",
+   "interact"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "not_on_stair",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "a blocked arrival slot rejects interact",
+  "level": "FX_stair_blocked",
+  "actions": [
+   "interact"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "arrival_blocked",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "an ACTIVE shadow on the arrival slot rejects interact",
+  "level": "FX_stair_shadow",
+  "actions": [
+   "wait",
+   "wait",
+   "interact"
+  ],
+  "expect": {
+   "rejected_at": 2,
+   "reason": "arrival_blocked",
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "a DORMANT shadow on the arrival slot does not block interact",
+  "level": "FX_stair_shadow",
+  "actions": [
+   "interact"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 1
+  }
+ }
+]

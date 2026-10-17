@@ -1,0 +1,56 @@
+{
+ "id": "FX_bridge_burn",
+ "title": "FX_bridge_burn",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [
+  {
+   "hour": 12,
+   "terrain": [
+    "..~..",
+    ".....",
+    "....."
+   ]
+  }
+ ],
+ "player": {
+  "hour": 12,
+  "slot": [
+   2,
+   1
+  ]
+ },
+ "objects": [
+  {
+   "id": "br",
+   "type": "bridge",
+   "hour": 12,
+   "slot": [
+    2,
+    0
+   ],
+   "state": "INTACT",
+   "flammable": true
+  },
+  {
+   "id": "exit_far",
+   "type": "exit",
+   "hour": 10,
+   "slot": [
+    4,
+    2
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}

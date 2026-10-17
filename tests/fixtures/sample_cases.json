@@ -1,0 +1,26 @@
+[
+  {
+    "name": "L01 solution wins in 10",
+    "level": "L01_first_crate",
+    "actions": ["move:right", "burn:right", "move:right", "move:right", "move:right", "interact", "move:right", "move:right", "move:right", "move:right"],
+    "expect": { "won": true, "failed": false, "actions_used": 10 }
+  },
+  {
+    "name": "move into a wall is rejected",
+    "level": "T01_wall",
+    "actions": ["move:right"],
+    "expect": { "rejected_at": 0, "reason": "blocked_terrain", "actions_used": 0 }
+  },
+  {
+    "name": "burn on empty floor is rejected",
+    "level": "L01_first_crate",
+    "actions": ["burn:up"],
+    "expect": { "rejected_at": 0, "reason": "nothing_to_burn", "actions_used": 0 }
+  },
+  {
+    "name": "any action after the win is level_over",
+    "level": "L01_first_crate",
+    "actions": ["move:right", "burn:right", "move:right", "move:right", "move:right", "interact", "move:right", "move:right", "move:right", "move:right", "wait"],
+    "expect": { "won": true, "actions_used": 10, "rejected_at": 10, "reason": "level_over" }
+  }
+]

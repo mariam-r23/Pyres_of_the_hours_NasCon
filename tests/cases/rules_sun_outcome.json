@@ -1,0 +1,133 @@
+[
+ {
+  "name": "actions_per_hour 2: the hour passes after 2 actions",
+  "level": "FX_sun_apH2",
+  "actions": [
+   "wait",
+   "wait",
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 2,
+   "reason": "shadow_blocks",
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "dial complete before the exit fails the level",
+  "level": "FX_day",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait"
+  ],
+  "expect": {
+   "won": false,
+   "failed": true,
+   "actions_used": 6
+  }
+ },
+ {
+  "name": "one action before the dial completes is still playing",
+  "level": "FX_day",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 5
+  }
+ },
+ {
+  "name": "default day is 18 actions",
+  "level": "FX_day_default",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait"
+  ],
+  "expect": {
+   "failed": true,
+   "actions_used": 18
+  }
+ },
+ {
+  "name": "17 actions is still playing",
+  "level": "FX_day_default",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait"
+  ],
+  "expect": {
+   "failed": false,
+   "actions_used": 17
+  }
+ },
+ {
+  "name": "reaching the exit on the very last action still wins",
+  "level": "FX_win_last",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "wait",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 6
+  }
+ },
+ {
+  "name": "sun.start_index 4: the dial completes after 2 actions",
+  "level": "FX_start4",
+  "actions": [
+   "wait",
+   "wait"
+  ],
+  "expect": {
+   "failed": true,
+   "actions_used": 2
+  }
+ }
+]

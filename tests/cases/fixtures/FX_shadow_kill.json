@@ -1,0 +1,56 @@
+{
+ "id": "FX_shadow_kill",
+ "title": "FX_shadow_kill",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 1
+ },
+ "rooms": [],
+ "player": {
+  "hour": 12,
+  "slot": [
+   1,
+   1
+  ]
+ },
+ "objects": [
+  {
+   "id": "cr",
+   "type": "crate",
+   "hour": 12,
+   "slot": [
+    2,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": true
+  },
+  {
+   "id": "ex",
+   "type": "exit",
+   "hour": 12,
+   "slot": [
+    4,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": [
+  {
+   "id": "sh",
+   "hour": 12,
+   "slot": [
+    3,
+    1
+   ]
+  }
+ ]
+}

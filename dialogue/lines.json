@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "note": "Beat sheet: 18 of the 15-20 target lines. Moods: amused, annoyed, triumphant, menacing. Max 15 words each.",
+  "lines": [
+    { "id": "a1_burn_01",   "trigger": "on_burn",   "mood": "amused",     "act": 1, "text": "Mm, there it goes. Doesn't it feel nice to let something go?" },
+    { "id": "a1_burn_02",   "trigger": "on_burn",   "mood": "triumphant", "act": 1, "text": "Oh, that was fun. Burn another, Keeper. I'll carry it anywhere." },
+    { "id": "a1_ash_01",    "trigger": "on_ash_moved", "mood": "amused",  "act": 1, "text": "Delivered! Don't thank me. Nobody ever does." },
+    { "id": "a1_ash_02",    "trigger": "on_ash_moved", "mood": "triumphant", "act": 1, "text": "Back and forth, hour to hour. I never get tired. Isn't that useful?" },
+    { "id": "a1_solve_01",  "trigger": "on_solve",  "mood": "triumphant", "act": 1, "text": "Another hour kept. You're so good at keeping things, Keeper." },
+    { "id": "a1_undo_01",   "trigger": "on_undo",   "mood": "annoyed",    "act": 1, "text": "Rewinding again? Fine. I'll wait. I'm very good at waiting." },
+    { "id": "a1_idle_01",   "trigger": "on_idle",   "mood": "amused",     "act": 1, "text": "Don't mind me, Keeper. I've got nothing but time. Hours and hours of it." },
+    { "id": "a1_idle_02",   "trigger": "on_idle",   "mood": "annoyed",    "act": 1, "text": "Still thinking? Some of us have been burning all day." },
+
+    { "id": "a2_shadow_01", "trigger": "on_shadow_appeared",  "mood": "amused",   "act": 2, "text": "Oh, look. Company. They remember you, Keeper." },
+    { "id": "a2_shadow_02", "trigger": "on_shadow_appeared",  "mood": "menacing", "act": 2, "text": "Another one. Every burn leaves something behind, Keeper. Didn't you know?" },
+    { "id": "a2_ash_01",    "trigger": "on_ash_moved",        "mood": "amused",   "act": 2, "text": "Ha! ...Ha. Funny. It used to echo further than that." },
+    { "id": "a2_burn_01",   "trigger": "on_burn",             "mood": "annoyed",  "act": 2, "text": "Go on, burn it. Somebody has to keep this place warm." },
+    { "id": "a2_destroy_01","trigger": "on_shadow_destroyed", "mood": "menacing", "act": 2, "text": "Gone? Oh, they don't go. They just wait somewhere you can't see." },
+    { "id": "a2_solve_01",  "trigger": "on_solve",            "mood": "amused",   "act": 2, "text": "Solved it. Again. Ever wonder what each solution cost, Keeper?" },
+
+    { "id": "a3_reveal_01", "trigger": "on_reveal",      "mood": "menacing",   "act": 3, "text": "I'm not escaping the clock, Keeper. I'm finishing it. Your order built it around me." },
+    { "id": "a3_choice_01", "trigger": "on_choice",      "mood": "menacing",   "act": 3, "text": "Wind it, and I go out. Leave it, and the day does. Choose, Keeper." },
+    { "id": "a3_wind_01",   "trigger": "on_ending_wind", "mood": "menacing",   "act": 3, "text": "Go on, wind it. You were always so good at keeping me." },
+    { "id": "a3_burn_01",   "trigger": "on_ending_burn", "mood": "triumphant", "act": 3, "text": "Delivered, Keeper. Last one. Go on, thank me. Nobody ever has." }
+  ]
+}

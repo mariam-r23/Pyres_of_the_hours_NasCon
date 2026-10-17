@@ -1,0 +1,37 @@
+{
+ "L01_first_crate": {
+  "length": 10,
+  "actions": [
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L02_wake_the_shadow": {
+  "length": 15,
+  "actions": [
+   "move:right",
+   "move:right",
+   "burn:up",
+   "interact",
+   "move:right",
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ }
+}

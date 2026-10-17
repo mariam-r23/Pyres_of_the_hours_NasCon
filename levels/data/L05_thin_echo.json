@@ -1,0 +1,102 @@
+{
+  "id": "L05_thin_echo",
+  "title": "Thin Echo",
+  "act": 2,
+  "spirit_mood": "annoyed",
+  "mood_weights": {
+    "annoyed": 0.5,
+    "amused": 0.2,
+    "menacing": 0.3
+  },
+  "grid": {
+    "w": 5,
+    "h": 3
+  },
+  "sun": {
+    "start_index": 0,
+    "actions_per_hour": 4
+  },
+  "rooms": [
+    {
+      "hour": 12,
+      "terrain": [
+        ".....",
+        ".....",
+        "....."
+      ]
+    },
+    {
+      "hour": 2,
+      "terrain": [
+        "..#..",
+        ".....",
+        "..#.."
+      ]
+    }
+  ],
+  "player": {
+    "hour": 12,
+    "slot": [
+      0,
+      1
+    ]
+  },
+  "objects": [
+    {
+      "id": "crate_k",
+      "type": "crate",
+      "hour": 12,
+      "slot": [
+        2,
+        1
+      ],
+      "flammable": true,
+      "ash_link": {
+        "hour": 2,
+        "slot": [
+          2,
+          1
+        ],
+        "becomes": "crate"
+      }
+    },
+    {
+      "id": "stair_12",
+      "type": "stair",
+      "hour": 12,
+      "slot": [
+        4,
+        1
+      ],
+      "links_to": {
+        "hour": 2,
+        "slot": [
+          0,
+          1
+        ]
+      },
+      "flammable": false
+    },
+    {
+      "id": "exit_1",
+      "type": "exit",
+      "hour": 2,
+      "slot": [
+        4,
+        1
+      ],
+      "flammable": false
+    }
+  ],
+  "shadows": [
+    {
+      "id": "sh_1",
+      "hour": 2,
+      "slot": [
+        3,
+        1
+      ]
+    }
+  ],
+  "par_actions": 12
+}

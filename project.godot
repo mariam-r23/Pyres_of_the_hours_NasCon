@@ -11,5 +11,10 @@ config_version=5
 [application]
 
 config/name="Pyre of the hours"
+run/main_scene="uid://m13yvfl4ewn5"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+EventBus="*res://presentation/event_bus.gd"

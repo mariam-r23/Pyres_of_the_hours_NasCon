@@ -1,0 +1,151 @@
+[
+ {
+  "name": "wall blocks and the rejection is free",
+  "level": "FX_wall",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "blocked_terrain",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "moving off the grid is rejected",
+  "level": "FX_edge",
+  "actions": [
+   "move:up"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "out_of_bounds",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "a rejected action does not count (one valid wait, then a rejection)",
+  "level": "FX_edge",
+  "actions": [
+   "wait",
+   "move:up"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "out_of_bounds",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "a chasm blocks without a filler",
+  "level": "FX_chasm",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "blocked_terrain",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "an INTACT bridge makes a chasm walkable",
+  "level": "FX_bridge",
+  "actions": [
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "burning the bridge makes the chasm block again",
+  "level": "FX_bridge_burn",
+  "actions": [
+   "burn:up",
+   "move:up"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "blocked_terrain",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "an ash_path is walkable on a chasm",
+  "level": "FX_ash_path",
+  "actions": [
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "an INTACT crate blocks",
+  "level": "FX_crate",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "blocked_object",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "burning a crate leaves walkable rubble",
+  "level": "FX_crate",
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "actions_used": 3
+  }
+ },
+ {
+  "name": "an INTACT door blocks",
+  "level": "FX_door",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "blocked_object",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "a burned door is open",
+  "level": "FX_door",
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "actions_used": 3
+  }
+ },
+ {
+  "name": "stepping onto the exit wins",
+  "level": "FX_exit",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 1
+  }
+ }
+]

@@ -1,0 +1,146 @@
+{
+  "id": "L07_crowded_room",
+  "title": "Crowded Room",
+  "act": 2,
+  "spirit_mood": "annoyed",
+  "mood_weights": {
+    "annoyed": 0.5,
+    "menacing": 0.3,
+    "amused": 0.2
+  },
+  "grid": {
+    "w": 5,
+    "h": 5
+  },
+  "sun": {
+    "start_index": 1,
+    "actions_per_hour": 3
+  },
+  "rooms": [
+    {
+      "hour": 12,
+      "terrain": [
+        "..#..",
+        ".....",
+        ".....",
+        ".....",
+        "..#.."
+      ]
+    },
+    {
+      "hour": 2,
+      "terrain": [
+        "..#..",
+        ".....",
+        ".....",
+        ".....",
+        "..#.."
+      ]
+    }
+  ],
+  "player": {
+    "hour": 12,
+    "slot": [
+      0,
+      2
+    ]
+  },
+  "objects": [
+    {
+      "id": "crate_a",
+      "type": "crate",
+      "hour": 12,
+      "slot": [
+        2,
+        2
+      ],
+      "flammable": true,
+      "ash_link": {
+        "hour": 2,
+        "slot": [
+          2,
+          2
+        ],
+        "becomes": "crate"
+      }
+    },
+    {
+      "id": "stair_12",
+      "type": "stair",
+      "hour": 12,
+      "slot": [
+        4,
+        2
+      ],
+      "links_to": {
+        "hour": 2,
+        "slot": [
+          0,
+          2
+        ]
+      },
+      "flammable": false
+    },
+    {
+      "id": "exit_1",
+      "type": "exit",
+      "hour": 2,
+      "slot": [
+        4,
+        2
+      ],
+      "flammable": false
+    }
+  ],
+  "shadows": [
+    {
+      "id": "sh_1",
+      "hour": 12,
+      "slot": [
+        2,
+        1
+      ]
+    },
+    {
+      "id": "sh_2",
+      "hour": 12,
+      "slot": [
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sh_3",
+      "hour": 12,
+      "slot": [
+        3,
+        2
+      ]
+    },
+    {
+      "id": "sh_4",
+      "hour": 2,
+      "slot": [
+        2,
+        1
+      ]
+    },
+    {
+      "id": "sh_5",
+      "hour": 2,
+      "slot": [
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sh_6",
+      "hour": 2,
+      "slot": [
+        3,
+        2
+      ]
+    }
+  ],
+  "par_actions": 11
+}
