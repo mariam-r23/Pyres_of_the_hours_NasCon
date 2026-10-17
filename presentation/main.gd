@@ -10,6 +10,7 @@ const EventBusScript := preload("res://presentation/event_bus.gd")
 const RoomViewScript := preload("res://presentation/room_view.gd")
 const LevelList := preload("res://presentation/level_list.gd")
 const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
+const SpiritDirectorScript := preload("res://presentation/spirit_director.gd")
 const Sun := preload("res://core/sun.gd")
 
 const WON_NEXT_TEXT := "You reached the exit.\nPress N for the next level, R to restart."
@@ -44,6 +45,20 @@ const FEEDBACK_FADE := 0.5
 ## The HUD (status, hint, controls) fades out during the ripple shot.
 const HUD_FADE_TIME := 0.15
 
+## Spirit speech placeholder (ui/ can replace it by listening to spirit_said):
+## stays SPEECH_MIN_TIME s, longer for long lines, then fades.
+const SPEECH_MIN_TIME := 3.5
+const SPEECH_TIME_PER_CHAR := 0.05
+const SPEECH_FADE := 0.6
+
+## Placeholder ending prompt / lines until Mariam's ending screen (ui/) exists.
+## Debug fallback: while the choice is pending, 1 = wind, 2 = burn.
+const ENDING_DEBUG_TEXT := "Choose the ending:\n1 = wind the clock    2 = let it burn"
+const ENDING_TEXTS := {
+	"wind": "You wind the clock. The day goes on, and she goes out.",
+	"burn": "You let it burn. She is free, and the hours are gone.",
+}
+
 ## Cold, dark world (see room_view.gd COLORS for the color rule).
 const BACKGROUND := Color(0.035, 0.045, 0.065)
 const AMBIENT := Color(0.45, 0.52, 0.62)
@@ -56,6 +71,7 @@ var controller: Node
 var clock: Node3D
 var bus: Node
 var ripple: Node3D
+var director: Node
 ## Id of the level being played ("" before the first load) and its meta.
 var level_id := ""
 var level_meta := {}
@@ -69,6 +85,12 @@ var _hud_tween: Tween
 var _refresh_queued := false
 ## [hour, slot] pairs the ripple camera revealed; popped after the next redraw.
 var _pending_pops: Array = []
+var _speech: Label
+var _speech_mood: Label
+var _speech_tween: Tween
+var _loading_path := ""
+## The placeholder ending line once a choice is made ("" before).
+var _ending_text := ""
 
 
 func _ready() -> void:
@@ -98,6 +120,16 @@ func _ready() -> void:
 	bus.level_restarted.connect(ripple.cancel)
 	ripple.hidden_slots_changed.connect(_queue_refresh)
 	ripple.slot_revealed.connect(_on_slot_revealed)
+	# ui/ listens to the bus, never to the camera.
+	ripple.ripple_started.connect(func(): bus.ripple_started.emit())
+	ripple.ripple_finished.connect(func(): bus.ripple_finished.emit())
+
+	# The fire spirit: which trigger speaks when (lines come from dialogue/).
+	director = SpiritDirectorScript.new()
+	director.name = "SpiritDirector"
+	director.connect_bus(bus)
+	director.connect_ripple(ripple)
+	add_child(director)
 
 	_build_ui()
 	ripple.ripple_started.connect(func(): fade_hud(0.0, HUD_FADE_TIME))
@@ -112,6 +144,10 @@ func _ready() -> void:
 	bus.undo_done.connect(func(_event): hide_feedback())
 	bus.level_loaded.connect(_on_level_loaded)
 	bus.level_restarted.connect(_queue_refresh)
+	bus.spirit_said.connect(show_speech)
+	bus.ending_chosen.connect(_on_ending_chosen)
+	bus.undo_done.connect(func(_event): _ending_text = "")
+	bus.level_restarted.connect(func(): _ending_text = "")
 	controller.burn_mode_changed.connect(_on_burn_mode_changed)
 
 	var first = LevelList.first()
@@ -126,6 +162,11 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
+		return
+	# Debug fallback for the ending choice until ui/ has its screen.
+	if director.ending_pending and key.keycode in [KEY_1, KEY_2]:
+		bus.ending_chosen.emit("wind" if key.keycode == KEY_1 else "burn")
+		get_viewport().set_input_as_handled()
 		return
 	var target = null
 	match key.keycode:
@@ -148,6 +189,7 @@ func load_entry(entry: Dictionary) -> Array:
 	ripple.cancel()
 	var previous_id := level_id
 	level_id = entry["id"]
+	_loading_path = entry["path"]
 	var errors: Array = controller.load_level(entry["path"])
 	if not errors.is_empty():
 		level_id = previous_id
@@ -163,6 +205,19 @@ static func end_message(status: String, has_next_level: bool) -> String:
 		"failed":
 			return FAILED_TEXT
 	return ""
+
+
+## What ui/ needs for the HUD, sent as hud_changed after every redraw.
+static func hud_info(id: String, meta: Dictionary, state) -> Dictionary:
+	return {
+		"level_id": id,
+		"title": meta.get("title", ""),
+		"actions_used": state.action_count,
+		"par": meta.get("par_actions", -1),
+		"sun_index": Sun.sun_index(state),
+		"sun_hour": ClockLayoutScript.sun_hour(state),
+		"status": state.status,
+	}
 
 
 ## Friendly text for a rejection reason; the raw reason if it is not mapped.
@@ -209,6 +264,9 @@ static func sun_text(state) -> String:
 
 func _on_level_loaded(meta: Dictionary) -> void:
 	level_meta = meta
+	_ending_text = ""
+	director.start_level(level_id, meta, _loading_path)
+	hide_speech()
 	_queue_refresh()
 
 
@@ -231,9 +289,18 @@ func _refresh() -> void:
 			clock.pop_slot(pop[0], pop[1])
 	_pending_pops = []
 	ripple.grid_size = Vector2i(state.grid_w, state.grid_h)
-	_show_message(end_message(state.status, LevelList.next_of(level_id) != null))
+	if state.status == "won" and level_id == SpiritDirectorScript.ENDING_LEVEL_ID:
+		# The ending level: ui/ shows the choice (ending_choice_requested);
+		# until it exists, a debug prompt, then the placeholder ending line.
+		if _ending_text != "":
+			_show_message(_ending_text)
+		else:
+			_show_message(ENDING_DEBUG_TEXT if director.ending_pending else "")
+	else:
+		_show_message(end_message(state.status, LevelList.next_of(level_id) != null))
 	_status.text = status_text(level_meta, level_id, state)
 	_update_context_hint()
+	bus.hud_changed.emit(hud_info(level_id, level_meta, state))
 
 
 ## Shows a short line near the bottom center, then fades it out.
@@ -247,6 +314,40 @@ func show_feedback(text: String) -> void:
 	_feedback_tween.tween_interval(FEEDBACK_HOLD)
 	_feedback_tween.tween_property(_feedback, "modulate:a", 0.0, FEEDBACK_FADE)
 	_feedback_tween.tween_callback(func(): _feedback.visible = false)
+
+
+## Placeholder speech line at the top center with a small mood tag.
+func show_speech(_trigger: String, mood: String, text: String) -> void:
+	if _speech_tween != null:
+		_speech_tween.kill()
+	_speech.text = text
+	_speech_mood.text = mood
+	for label in [_speech, _speech_mood]:
+		label.modulate.a = 1.0
+		label.visible = true
+	if not is_inside_tree():
+		return
+	var hold := maxf(SPEECH_MIN_TIME, text.length() * SPEECH_TIME_PER_CHAR)
+	_speech_tween = create_tween()
+	_speech_tween.tween_interval(hold)
+	_speech_tween.set_parallel(true)
+	_speech_tween.tween_property(_speech, "modulate:a", 0.0, SPEECH_FADE)
+	_speech_tween.tween_property(_speech_mood, "modulate:a", 0.0, SPEECH_FADE)
+	_speech_tween.chain().tween_callback(hide_speech)
+
+
+func hide_speech() -> void:
+	if _speech_tween != null:
+		_speech_tween.kill()
+		_speech_tween = null
+	_speech.visible = false
+	_speech_mood.visible = false
+
+
+func _on_ending_chosen(choice: String) -> void:
+	if ENDING_TEXTS.has(choice):
+		_ending_text = ENDING_TEXTS[choice]
+		_queue_refresh()
 
 
 func _on_slot_revealed(hour: int, slot: Vector2i) -> void:
@@ -351,6 +452,30 @@ func _build_ui() -> void:
 	_hint.add_theme_color_override("font_color", TEXT_COLOR)
 	_hint.text = CONTROLS_TEXT
 	layer.add_child(_hint)
+
+	# Spirit speech (placeholder): a small mood tag over the line, top center.
+	_speech_mood = Label.new()
+	_speech_mood.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_speech_mood.offset_top = 14
+	_speech_mood.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_speech_mood.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_speech_mood.add_theme_font_size_override("font_size", 13)
+	_speech_mood.add_theme_color_override("font_color", TEXT_COLOR)
+	_speech_mood.visible = false
+	layer.add_child(_speech_mood)
+	_speech = Label.new()
+	_speech.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_speech.offset_left = -540
+	_speech.offset_right = 540
+	_speech.offset_top = 32
+	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_speech.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_speech.add_theme_font_size_override("font_size", 22)
+	_speech.add_theme_color_override("font_color", HINT_COLOR)
+	_speech.add_theme_constant_override("outline_size", 6)
+	_speech.add_theme_color_override("font_outline_color", BACKGROUND)
+	_speech.visible = false
+	layer.add_child(_speech)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
