@@ -232,35 +232,30 @@
   }
  },
  {
-  "name": "L10_center_of_the_dial solution wins in 21",
+  "name": "L10_center_of_the_dial solution wins in 16",
   "level": "L10_center_of_the_dial",
   "actions": [
-   "move:up",
+   "move:right",
+   "move:right",
    "move:right",
    "burn:up",
-   "wait",
-   "burn:down",
-   "move:down",
-   "move:right",
-   "move:right",
+   "burn:left",
    "move:right",
    "interact",
    "move:right",
-   "move:right",
+   "wait",
    "burn:right",
    "move:right",
    "move:right",
-   "move:up",
+   "move:right",
    "interact",
-   "move:right",
-   "move:right",
    "move:right",
    "move:right"
   ],
   "expect": {
    "won": true,
    "failed": false,
-   "actions_used": 21
+   "actions_used": 16
   }
  }
 ]

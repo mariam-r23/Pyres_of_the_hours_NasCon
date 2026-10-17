@@ -5,8 +5,7 @@
   "spirit_mood": "menacing",
   "mood_weights": {
     "menacing": 0.7,
-    "annoyed": 0.2,
-    "amused": 0.1
+    "triumphant": 0.3
   },
   "grid": {
     "w": 5,
@@ -14,7 +13,7 @@
   },
   "sun": {
     "start_index": 0,
-    "actions_per_hour": 4
+    "actions_per_hour": 3
   },
   "rooms": [
     {
@@ -22,29 +21,29 @@
       "terrain": [
         "..#..",
         "..#..",
-        ".....",
+        "..~..",
         "..#..",
         "..#.."
       ]
     },
     {
-      "hour": 2,
+      "hour": 4,
       "terrain": [
-        "..~#.",
-        "..~#.",
-        "..~..",
-        "..~#.",
-        "..~#."
+        "..#..",
+        ".....",
+        ".....",
+        ".....",
+        "..#.."
       ]
     },
     {
-      "hour": 4,
+      "hour": 6,
       "terrain": [
-        "..~~.",
-        "..~~.",
-        "..~~.",
-        "..~~.",
-        "..~~."
+        ".#...",
+        ".#...",
+        ".~...",
+        ".#...",
+        ".#..."
       ]
     }
   ],
@@ -57,33 +56,31 @@
   },
   "objects": [
     {
-      "id": "crate_b",
-      "type": "crate",
+      "id": "bridge_a",
+      "type": "bridge",
       "hour": 12,
       "slot": [
-        1,
+        2,
         2
       ],
-      "state": "INTACT",
       "flammable": true,
       "ash_link": {
-        "hour": 2,
+        "hour": 6,
         "slot": [
-          2,
+          1,
           2
         ],
         "becomes": "ash_path"
       }
     },
     {
-      "id": "crate_p",
+      "id": "crate_k",
       "type": "crate",
       "hour": 12,
       "slot": [
-        1,
-        0
+        3,
+        1
       ],
-      "state": "INTACT",
       "flammable": true,
       "ash_link": {
         "hour": 4,
@@ -91,7 +88,7 @@
           2,
           2
         ],
-        "becomes": "ash_path"
+        "becomes": "crate"
       }
     },
     {
@@ -102,90 +99,68 @@
         4,
         2
       ],
-      "state": "INTACT",
-      "flammable": false,
       "links_to": {
-        "hour": 2,
+        "hour": 4,
         "slot": [
           0,
           2
         ]
-      }
+      },
+      "flammable": false
     },
     {
-      "id": "door_g",
-      "type": "door",
-      "hour": 2,
-      "slot": [
-        3,
-        2
-      ],
-      "state": "INTACT",
-      "flammable": true,
-      "ash_link": {
-        "hour": 4,
-        "slot": [
-          3,
-          2
-        ],
-        "becomes": "ash_path"
-      }
-    },
-    {
-      "id": "stair_2",
+      "id": "stair_4",
       "type": "stair",
-      "hour": 2,
-      "slot": [
-        4,
-        1
-      ],
-      "state": "INTACT",
-      "flammable": false,
-      "links_to": {
-        "hour": 4,
-        "slot": [
-          0,
-          2
-        ]
-      }
-    },
-    {
-      "id": "exit_1",
-      "type": "exit",
       "hour": 4,
       "slot": [
         4,
         2
       ],
-      "state": "INTACT",
+      "links_to": {
+        "hour": 6,
+        "slot": [
+          0,
+          2
+        ]
+      },
+      "flammable": false
+    },
+    {
+      "id": "exit_1",
+      "type": "exit",
+      "hour": 6,
+      "slot": [
+        2,
+        2
+      ],
       "flammable": false
     }
   ],
   "shadows": [
     {
-      "id": "sh_a",
-      "hour": 12,
-      "slot": [
-        2,
-        2
-      ]
-    },
-    {
-      "id": "sh_d",
-      "hour": 2,
-      "slot": [
-        4,
-        2
-      ]
-    },
-    {
-      "id": "sh_e",
+      "id": "sh_1",
       "hour": 4,
       "slot": [
-        1,
-        0
+        2,
+        1
+      ]
+    },
+    {
+      "id": "sh_2",
+      "hour": 4,
+      "slot": [
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sh_3",
+      "hour": 4,
+      "slot": [
+        3,
+        2
       ]
     }
   ],
-  "par_actions": 21
+  "par_actions": 16
 }

@@ -159,27 +159,22 @@
   ]
  },
  "L10_center_of_the_dial": {
-  "length": 21,
+  "length": 16,
   "actions": [
-   "move:up",
+   "move:right",
+   "move:right",
    "move:right",
    "burn:up",
-   "wait",
-   "burn:down",
-   "move:down",
-   "move:right",
-   "move:right",
+   "burn:left",
    "move:right",
    "interact",
    "move:right",
-   "move:right",
+   "wait",
    "burn:right",
    "move:right",
    "move:right",
-   "move:up",
+   "move:right",
    "interact",
-   "move:right",
-   "move:right",
    "move:right",
    "move:right"
   ]
