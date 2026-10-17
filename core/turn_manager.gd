@@ -7,11 +7,12 @@ extends RefCounted
 ##   rejected -> { ok: false, events: [action_rejected],     state: <the same input>, reason: "..." }
 ## Rejected actions are free: no counter change, no sun, no snapshot.
 ##
-## Implemented so far: move, wait, interact (stairs).
-## Still to come: burn + ash transfer, sun, shadows, win/fail (see TODOs).
+## Implemented so far: move, wait, interact (stairs), burn + ash transfer.
+## Still to come: sun, shadows, win/fail (see TODOs).
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
+const AshTransfer := preload("res://core/ash_transfer.gd")
 
 ## y grows downward (section 3.1).
 const DIRECTIONS := {
@@ -37,6 +38,7 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 	var reason := ""
 	var target_hour := state.player_hour
 	var target_slot := state.player_slot
+	var burn_slot = null  # Vector2i of the object to burn, for a burn action
 	match action.get("type"):
 		"move":
 			var dir = action.get("dir")
@@ -56,10 +58,14 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 			if not Walkability.is_walkable(state, target_hour, target_slot):
 				reason = REASON_ARRIVAL_BLOCKED
 			# TODO(step 8): also "arrival_blocked" if an active shadow is on the arrival slot.
+		"burn":
+			var dir = action.get("dir")
+			if not DIRECTIONS.has(dir):
+				return _reject(state, REASON_UNKNOWN_ACTION)
+			burn_slot = state.player_slot + DIRECTIONS[dir]
+			reason = AshTransfer.check_burn(state, state.player_hour, burn_slot)
 		"wait":
 			pass
-		# TODO(step 5b/6): "burn" by direction: nothing_to_burn, not_intact, not_flammable,
-		# ash_target_occupied; then ash transfer and shadow destruction (core/ash_transfer.gd).
 		_:
 			return _reject(state, REASON_UNKNOWN_ACTION)
 	if reason != "":
@@ -75,6 +81,8 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 			"from_hour": state.player_hour, "from_slot": state.player_slot,
 			"to_hour": target_hour, "to_slot": target_slot,
 		})
+	if burn_slot != null:
+		AshTransfer.apply_burn(new_state, state.player_hour, burn_slot, events)
 	new_state.action_count += 1
 
 	# TODO(step 8): reject with "shadow_wakes_on_you" (returning the input state) if the
@@ -89,12 +97,14 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 
 
 ## Every action that apply_action would accept right now, in a fixed order:
-## move up/down/left/right, interact, wait. Never includes an invalid action.
+## move up/down/left/right, burn up/down/left/right, interact, wait.
+## Never includes an invalid action.
 static func legal_actions(state: GameStateScript) -> Array:
 	var candidates: Array = []
 	for dir in DIRECTION_ORDER:
 		candidates.append({"type": "move", "dir": dir})
-	# TODO(step 5b/6): burn in each direction.
+	for dir in DIRECTION_ORDER:
+		candidates.append({"type": "burn", "dir": dir})
 	candidates.append({"type": "interact"})
 	candidates.append({"type": "wait"})
 	return candidates.filter(func(action): return apply_action(state, action)["ok"])

@@ -22,6 +22,12 @@ const GameStateScript := preload("res://core/game_state.gd")
 const CHASM_FILLERS := ["bridge", "ash_path"]
 ## Types that block their tile while INTACT.
 const BLOCKING_TYPES := ["crate", "door"]
+## Default `flammable` per type (type table, 3.2). Used for objects created at
+## run time by ash links; level files still set `flammable` on every object.
+const DEFAULT_FLAMMABLE := {
+	"bridge": true, "crate": true, "door": true,
+	"ash_path": false, "stair": false, "exit": false,
+}
 
 const REASON_OUT_OF_BOUNDS := "out_of_bounds"
 const REASON_BLOCKED_TERRAIN := "blocked_terrain"
