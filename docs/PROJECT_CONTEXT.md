@@ -360,7 +360,7 @@ Do not repeat: {last_3_lines}
 
 ## 11. Clarifications (decided by Anosha, part of the spec)
 
-1. The Python reference is `pyre_logic/` (not `reference/python/`). The rejection reasons are listed in item 11 below. Do not edit anything in `pyre_logic/`.
+1. The Python reference is `reference/python/` (owner: Mariam) and follows section 3. `pyre_logic/` is a retired prototype that does NOT follow section 3 (doorways instead of stairs, `E` exit terrain, N/E/S/W directions, `<id>>ash` ids, a "caught" fail); Mariam is deleting it in her PR. Do not use it as a reference, and do not edit it. The rejection reasons are listed in item 11 below.
 2. Undo emits only `undo_done` (NOT `action_applied`). Undo is always allowed, including out of a won or failed state, and is free.
 3. After `level_won` or `level_failed`, every action (including `wait`) is rejected with reason `level_over`. Undo still works.
 4. `wait` is rejected if it would wake a shadow on the player's tile (same rule as any other action).
@@ -370,7 +370,7 @@ Do not repeat: {last_3_lines}
 8. The validator rejects a shadow placed on a wall. A shadow on a chasm is allowed.
 9. Test command on Anosha's machine: `godot_console --headless -s tests/run_tests.gd`
 10. Shared cases (`tests/cases/*.json`) arrive later through `phase-1`. The runner accepts a file containing a LIST of cases (a single object is also fine); resolves `level` as an id by looking in `levels/data/<id>.json`, then `tests/cases/fixtures/<id>.json`, then `tests/fixtures/<id>.json`; treats `rejected_at` as a 0-based index into `actions`; and matches rejection `reason` strings exactly.
-11. Rejection reasons (agreed; the GDScript core and `pyre_logic/` use these exact strings):
+11. Rejection reasons (agreed; the GDScript core and `reference/python/` use these exact strings):
     - `move`: `out_of_bounds`, `blocked_terrain`, `blocked_object`, `shadow_blocks`
     - `interact`: `not_on_stair`, `arrival_blocked`
     - `burn`: `nothing_to_burn`, `not_flammable`, `not_intact`, `ash_target_occupied`
