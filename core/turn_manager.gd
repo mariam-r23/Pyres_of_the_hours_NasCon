@@ -19,6 +19,7 @@ const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
 const AshTransfer := preload("res://core/ash_transfer.gd")
 const Sun := preload("res://core/sun.gd")
+const LevelLoader := preload("res://core/level_loader.gd")
 
 ## y grows downward (section 3.1).
 const DIRECTIONS := {
@@ -142,6 +143,13 @@ static func legal_actions(state: GameStateScript) -> Array:
 	candidates.append({"type": "interact"})
 	candidates.append({"type": "wait"})
 	return candidates.filter(func(action): return apply_action(state, action)["ok"])
+
+
+## Level JSON data (6.1) -> GameState, or null if the data is bad.
+## Thin wrapper over core/level_loader.gd; call the loader directly to get
+## the error messages and the meta (title, mood, par...).
+static func load_level(data: Dictionary) -> GameStateScript:
+	return LevelLoader.load_dict(data)["state"]
 
 
 ## True if the sun has passed `hour` (section 3.5). See core/sun.gd.
