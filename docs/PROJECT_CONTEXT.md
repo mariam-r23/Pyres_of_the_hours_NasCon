@@ -357,3 +357,16 @@ Do not repeat: {last_3_lines}
 | 5 | In-game AI feature | A (spirit dialogue) | Mariam |
 | 6 | Judging criteria and submission format | Find out from organizers | Anosha |
 | 7 | Final act: stop the clock or let it burn | Two endings if time, else one | Team |
+
+## 11. Clarifications (decided by Anosha, part of the spec)
+
+1. The Python reference is `pyre_logic/` (not `reference/python/`). Read `pyre_logic/README.md` for the rejection reason list. Do not edit anything in `pyre_logic/`.
+2. Undo emits only `undo_done` (NOT `action_applied`). Undo is always allowed, including out of a won or failed state, and is free.
+3. After `level_won` or `level_failed`, every action (including `wait`) is rejected with reason `level_over`. Undo still works.
+4. `wait` is rejected if it would wake a shadow on the player's tile (same rule as any other action).
+5. A burn's 4-neighborhood excludes the burned slot itself.
+6. `level_failed` has reason `dial_complete`.
+7. `GONE` is reserved and unused: treat it as an empty slot.
+8. The validator rejects a shadow placed on a wall. A shadow on a chasm is allowed.
+9. Test command on Anosha's machine: `godot_console --headless -s tests/run_tests.gd`
+10. Shared cases (`tests/cases/*.json`) arrive later through `phase-1`. The runner accepts a file containing a LIST of cases (a single object is also fine); resolves `level` as an id by looking in `levels/data/<id>.json`, then `tests/cases/fixtures/<id>.json`; treats `rejected_at` as a 0-based index into `actions`; and matches rejection `reason` strings exactly.
