@@ -7,6 +7,10 @@ extends RefCounted
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
+const Sun := preload("res://core/sun.gd")
+
+## The burned slot's 4-neighbourhood (the burned slot itself is excluded).
+const NEIGHBOURS := [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
 
 const REASON_NOTHING_TO_BURN := "nothing_to_burn"
 const REASON_NOT_INTACT := "not_intact"
@@ -33,12 +37,14 @@ static func check_burn(state: GameStateScript, hour: int, slot: Vector2i) -> Str
 			return REASON_ASH_TARGET_OCCUPIED
 		if state.player_hour == link["hour"] and state.player_slot == link["slot"]:
 			return REASON_ASH_TARGET_OCCUPIED
-		# TODO(step 8): also ash_target_occupied if an ACTIVE shadow is on the link target.
+		if not Sun.active_shadow_at(state, link["hour"], link["slot"]).is_empty():
+			return REASON_ASH_TARGET_OCCUPIED
 	return ""
 
 
 ## Burns the object at (hour, slot) in `state` (which the caller owns) and
-## appends the events. Call only after check_burn() returned "".
+## appends the events. Call only after check_burn() returned "", and before
+## the action counter is incremented.
 static func apply_burn(state: GameStateScript, hour: int, slot: Vector2i, events: Array) -> void:
 	var obj := state.object_at(hour, slot)
 	# 1. The target becomes ASH and stays in place. ASH cannot burn again,
@@ -64,7 +70,12 @@ static func apply_burn(state: GameStateScript, hour: int, slot: Vector2i, events
 			"becomes": link["becomes"],
 		})
 
-	# 3. TODO(step 8): destroy every ACTIVE shadow in the same hour in the
-	#    4-neighbourhood of `slot` (not `slot` itself, clarification 5): set
-	#    "destroyed" = true and emit shadow_destroyed {id, hour}. Dormant
-	#    shadows are not affected.
+	# 3. Every ACTIVE shadow in the same hour next to `slot` (not on it,
+	#    clarification 5) is destroyed: removed from the state for good.
+	#    Dormant shadows are untouched. "Active" uses the sun BEFORE this
+	#    action, since the caller increments the counter afterwards.
+	for offset in NEIGHBOURS:
+		var sh := Sun.active_shadow_at(state, hour, slot + offset)
+		if not sh.is_empty():
+			state.shadows.erase(sh["id"])
+			events.append({"type": "shadow_destroyed", "id": sh["id"], "hour": hour})

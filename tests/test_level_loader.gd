@@ -110,7 +110,7 @@ func test_shadows_and_other_grid() -> bool:
 	check_eq(s.actions_per_hour, 4, "actions per hour")
 	check_eq(s.terrain[6], ["#~.", "..."], "hour 6 terrain")
 	check_eq(s.terrain[12], ["...", "..."], "unlisted room fits the grid")
-	check_eq(s.shadows["sh_1"], {"id": "sh_1", "hour": 2, "slot": Vector2i(1, 0), "destroyed": false}, "shadow")
+	check_eq(s.shadows["sh_1"], {"id": "sh_1", "hour": 2, "slot": Vector2i(1, 0)}, "shadow")
 	return true
 
 

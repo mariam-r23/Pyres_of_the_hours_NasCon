@@ -171,7 +171,6 @@ static func _load_shadows(data: Dictionary, state: GameStateScript, errors: Arra
 			"id": _get_string(src, "id", path, errors, ""),
 			"hour": _get_hour(src, "hour", path, errors),
 			"slot": _get_slot(src, "slot", path, errors),
-			"destroyed": false,
 		}
 		_add_by_id(state.shadows, sh, path, errors)
 

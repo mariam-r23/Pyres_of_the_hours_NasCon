@@ -26,7 +26,7 @@ func _make_state() -> GS:
 		"id": "exit_1", "type": "exit", "hour": 2, "slot": Vector2i(4, 2),
 		"state": GS.INTACT, "flammable": false,
 	}
-	s.shadows["sh_1"] = {"id": "sh_1", "hour": 2, "slot": Vector2i(3, 1), "destroyed": false}
+	s.shadows["sh_1"] = {"id": "sh_1", "hour": 2, "slot": Vector2i(3, 1)}
 	return s
 
 
@@ -69,8 +69,8 @@ func test_object_and_shadow_lookup() -> bool:
 	s.objects["crate_a"]["state"] = GS.GONE
 	check(s.object_at(12, Vector2i(2, 2)).is_empty(), "GONE counts as empty")
 	check_eq(s.shadow_at(2, Vector2i(3, 1)).get("id"), "sh_1", "shadow found")
-	s.shadows["sh_1"]["destroyed"] = true
-	check(s.shadow_at(2, Vector2i(3, 1)).is_empty(), "destroyed shadow is gone")
+	s.shadows.erase("sh_1")
+	check(s.shadow_at(2, Vector2i(3, 1)).is_empty(), "destroyed (removed) shadow is gone")
 	return true
 
 
@@ -91,7 +91,7 @@ func test_duplicate_deep_shares_nothing() -> bool:
 	c.objects["crate_a"]["state"] = GS.ASH
 	c.objects["crate_a"]["ash_link"]["becomes"] = "bridge"
 	c.objects["stair_12"]["links_to"]["hour"] = 4
-	c.shadows["sh_1"]["destroyed"] = true
+	c.shadows.erase("sh_1")
 	c.terrain[2][0] = "#####"
 	c.objects["new"] = {"id": "new", "type": "ash_path", "hour": 2, "slot": Vector2i(2, 2), "state": GS.INTACT, "flammable": false}
 	c.player_slot = Vector2i(1, 2)
@@ -112,7 +112,7 @@ func test_hash_key_detects_changes() -> bool:
 		"player hour": func(s: GS): s.player_hour = 2,
 		"action count": func(s: GS): s.action_count = 1,
 		"object state": func(s: GS): s.objects["crate_a"]["state"] = GS.ASH,
-		"shadow destroyed": func(s: GS): s.shadows["sh_1"]["destroyed"] = true,
+		"shadow destroyed": func(s: GS): s.shadows.erase("sh_1"),
 		"won": func(s: GS): s.won = true,
 		"failed": func(s: GS): s.failed = true,
 		"fail reason": func(s: GS): s.fail_reason = "dial_complete",

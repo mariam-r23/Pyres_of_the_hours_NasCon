@@ -1,18 +1,25 @@
 extends RefCounted
-## Validates and applies one action (PROJECT_CONTEXT.md 3.3, 6.2 and 11).
+## Validates and applies one action (PROJECT_CONTEXT.md 3.3 to 3.5, 6.2 and 11).
 ## No Nodes, graphics, audio or UI.
 ##
 ## apply_action(state, action) NEVER modifies `state`:
-##   valid    -> { ok: true,  events: [..., action_applied], state: <new deep copy>, reason: "" }
-##   rejected -> { ok: false, events: [action_rejected],     state: <the same input>, reason: "..." }
+##   valid    -> { ok: true,  events: [...], state: <new deep copy>, reason: "" }
+##   rejected -> { ok: false, events: [action_rejected], state: <the same input>, reason: "..." }
 ## Rejected actions are free: no counter change, no sun, no snapshot.
 ##
-## Implemented so far: move, wait, interact (stairs), burn + ash transfer.
-## Still to come: sun, shadows, win/fail (see TODOs).
+## Event order for a valid action:
+##   the action's own events (moved | burned, ash_moved, shadow_destroyed),
+##   sun_advanced, hour_passed (each newly passed hour),
+##   shadow_appeared (each surviving shadow in a newly passed hour),
+##   action_applied (last)
+##
+## Implemented so far: move, wait, interact, burn + ash transfer, sun, shadows.
+## Still to come: win/fail and level_over (see TODOs).
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
 const AshTransfer := preload("res://core/ash_transfer.gd")
+const Sun := preload("res://core/sun.gd")
 
 ## y grows downward (section 3.1).
 const DIRECTIONS := {
@@ -26,15 +33,18 @@ const DIRECTION_ORDER := ["up", "down", "left", "right"]
 
 const REASON_NOT_ON_STAIR := "not_on_stair"
 const REASON_ARRIVAL_BLOCKED := "arrival_blocked"
+const REASON_SHADOW_BLOCKS := "shadow_blocks"
+const REASON_SHADOW_WAKES_ON_YOU := "shadow_wakes_on_you"
 const REASON_UNKNOWN_ACTION := "unknown_action"
 
 
 static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
-	# TODO(step 10): if state.won or state.failed, reject with "level_over".
+	# TODO(part B): if the level is won or failed, reject with "level_over".
 	if typeof(action) != TYPE_DICTIONARY:
 		return _reject(state, REASON_UNKNOWN_ACTION)
 
 	# Validate against the untouched input first, so a rejection costs no copy.
+	# Shadow checks here use the sun BEFORE the action.
 	var reason := ""
 	var target_hour := state.player_hour
 	var target_slot := state.player_slot
@@ -46,7 +56,8 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 				return _reject(state, REASON_UNKNOWN_ACTION)
 			target_slot = state.player_slot + DIRECTIONS[dir]
 			reason = Walkability.check_walkable(state, target_hour, target_slot)["reason"]
-			# TODO(step 8): reject with "shadow_blocks" if an active shadow is on the target.
+			if reason == "" and not Sun.active_shadow_at(state, target_hour, target_slot).is_empty():
+				reason = REASON_SHADOW_BLOCKS
 		"interact":
 			var stair := state.object_at(state.player_hour, state.player_slot)
 			if stair.get("type") != "stair":
@@ -55,9 +66,9 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 				return _reject(state, REASON_ARRIVAL_BLOCKED)
 			target_hour = stair["links_to"]["hour"]
 			target_slot = stair["links_to"]["slot"]
-			if not Walkability.is_walkable(state, target_hour, target_slot):
+			if not Walkability.is_walkable(state, target_hour, target_slot) \
+					or not Sun.active_shadow_at(state, target_hour, target_slot).is_empty():
 				reason = REASON_ARRIVAL_BLOCKED
-			# TODO(step 8): also "arrival_blocked" if an active shadow is on the arrival slot.
 		"burn":
 			var dir = action.get("dir")
 			if not DIRECTIONS.has(dir):
@@ -70,6 +81,15 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 			return _reject(state, REASON_UNKNOWN_ACTION)
 	if reason != "":
 		return _reject(state, reason)
+
+	# Would a shadow wake on the player's tile after this action? Only shadows
+	# in newly passed hours wake; a burn only destroys already-active shadows,
+	# so it cannot remove one of these.
+	var from_index := Sun.sun_index(state)
+	var to_index := Sun.sun_index_at(state, state.action_count + 1)
+	var newly_passed := Sun.hours_passed_between(from_index, to_index)
+	if newly_passed.has(target_hour) and not state.shadow_at(target_hour, target_slot).is_empty():
+		return _reject(state, REASON_SHADOW_WAKES_ON_YOU)
 
 	var new_state: GameStateScript = state.duplicate_deep()
 	var events: Array = []
@@ -85,14 +105,16 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 		AshTransfer.apply_burn(new_state, state.player_hour, burn_slot, events)
 	new_state.action_count += 1
 
-	# TODO(step 8): reject with "shadow_wakes_on_you" (returning the input state) if the
-	# new sun index would wake a shadow on the player's tile. Applies to wait too.
-	# TODO(step 7): sun_index from action_count; emit sun_advanced, hour_passed and
-	# shadow_appeared when the index changes.
-	# TODO(step 10): player on exit -> won + level_won; else sun_index >= 6 ->
-	# failed + level_failed (reason "dial_complete").
+	if to_index != from_index:
+		events.append({"type": "sun_advanced", "from_index": from_index, "to_index": to_index})
+	for hour in newly_passed:
+		events.append({"type": "hour_passed", "hour": hour})
+	for sh in Sun.shadows_in_hours(new_state, newly_passed):
+		events.append({"type": "shadow_appeared", "id": sh["id"], "hour": sh["hour"], "slot": sh["slot"]})
 
 	events.append({"type": "action_applied", "actions_used": new_state.action_count})
+	# TODO(part B): player on an INTACT exit -> won + level_won; else dial
+	# complete -> failed + level_failed ("dial_complete"). After action_applied.
 	return {"ok": true, "events": events, "state": new_state, "reason": ""}
 
 
@@ -108,6 +130,11 @@ static func legal_actions(state: GameStateScript) -> Array:
 	candidates.append({"type": "interact"})
 	candidates.append({"type": "wait"})
 	return candidates.filter(func(action): return apply_action(state, action)["ok"])
+
+
+## True if the sun has passed `hour` (section 3.5). See core/sun.gd.
+static func is_hour_passed(state: GameStateScript, hour: int) -> bool:
+	return Sun.is_hour_passed(state, hour)
 
 
 static func _reject(state: GameStateScript, reason: String) -> Dictionary:

@@ -33,8 +33,9 @@ var terrain: Dictionary = {}
 ##         optional "ash_link": { "hour", "slot": Vector2i, "becomes" },
 ##         optional "links_to": { "hour", "slot": Vector2i } }
 var objects: Dictionary = {}
-## id -> { "id", "hour", "slot": Vector2i, "destroyed": bool }
+## id -> { "id", "hour", "slot": Vector2i }
 ## Dormant vs active is derived from the sun, so it is not stored.
+## A destroyed shadow is removed from this dictionary.
 var shadows: Dictionary = {}
 var player_hour: int = 12
 var player_slot: Vector2i = Vector2i.ZERO
@@ -84,10 +85,10 @@ func object_at(hour: int, slot: Vector2i) -> Dictionary:
 	return {}
 
 
-## The non-destroyed shadow at a slot (dormant or active), or {} if none.
+## The shadow at a slot (dormant or active), or {} if none.
 func shadow_at(hour: int, slot: Vector2i) -> Dictionary:
 	for sh in shadows.values():
-		if sh["hour"] == hour and sh["slot"] == slot and not sh["destroyed"]:
+		if sh["hour"] == hour and sh["slot"] == slot:
 			return sh
 	return {}
 
@@ -132,7 +133,7 @@ func hash_key() -> String:
 	ids.sort()
 	for id in ids:
 		var sh: Dictionary = shadows[id]
-		parts.append("S=%s@%d:%s:%d" % [sh["id"], sh["hour"], _slot_key(sh["slot"]), int(sh["destroyed"])])
+		parts.append("S=%s@%d:%s" % [sh["id"], sh["hour"], _slot_key(sh["slot"])])
 	return "|".join(parts)
 
 
