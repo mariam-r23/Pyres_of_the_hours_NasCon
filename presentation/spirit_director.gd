@@ -58,6 +58,8 @@ var ctx := {}
 var picker = null
 ## True while the ending choice is on screen (won the ending level, no choice yet).
 var ending_pending := false
+## True while a menu or the pause screen is open: idle time does not count.
+var suspended := false
 ## True once the reveal has been said this game session. Survives level loads
 ## and restarts, and is not undone by undo.
 var reveal_played := false
@@ -210,9 +212,10 @@ func has_pending_line() -> bool:
 # --- Idle --------------------------------------------------------------------
 
 ## Counts idle time; says on_idle once after IDLE_SECONDS while the level is
-## being played (never during the ripple shot, a win, a fail or the ending).
+## being played (never during the ripple shot, a win, a fail, the ending,
+## or while paused / in a menu).
 func advance_idle(delta: float) -> void:
-	if picker == null or _level_over or ending_pending or _idle_said:
+	if picker == null or suspended or _level_over or ending_pending or _idle_said:
 		return
 	if ripple != null and ripple.is_playing():
 		return
