@@ -25,9 +25,9 @@ const EVENT_TRIGGERS := {
 	"shadow_destroyed": "on_shadow_destroyed",
 }
 ## When one action raises several triggers, the first in this list is said.
-## (on_choice replaces on_solve on the ending level, so it ranks with it.)
+## (on_choice / on_reveal replace on_solve on their levels, so they rank with it.)
 const TRIGGER_PRIORITY := [
-	"on_choice", "on_solve", "on_fail", "on_shadow_destroyed", "on_shadow_appeared",
+	"on_choice", "on_reveal", "on_solve", "on_fail", "on_shadow_destroyed", "on_shadow_appeared",
 	"on_burn", "on_ash_moved", "on_undo",
 ]
 
@@ -37,19 +37,16 @@ const IDLE_SECONDS := 20.0
 ## The last level: winning it asks for the ending choice instead of "press N".
 const ENDING_LEVEL_ID := "L10_center_of_the_dial"
 const ENDING_TRIGGERS := {"wind": "on_ending_wind", "burn": "on_ending_burn"}
+## The reveal level ("The Fuel"): its FIRST win this game session says
+## on_reveal instead of on_solve; later wins say on_solve.
+const REVEAL_LEVEL_ID := "L09_the_fuel"
 
-# --- TBD with Mariam (pending decisions) -------------------------------------
-## TBD: if the picker finds no line, fall back to the level JSON's
-## spirit_lines[trigger] (only L01 has any today).
-const USE_LEVEL_SPIRIT_LINES := true
-## TBD: which bus event should say on_reveal (the act 3 reveal). "" = unwired.
-## To hook it up later, set this to a bus signal name, e.g. "level_loaded".
-const REVEAL_EVENT := ""
-# ------------------------------------------------------------------------------
+## Lines come only from dialogue/lines.json (decided with Mariam): a trigger
+## with no fitting line says nothing.
 
 ## Every decision, for diagnostics and tests:
-## {trigger, mood, text, tier, repeated, source} with source "lines" (picker),
-## "level" (spirit_lines fallback) or "none" (nothing to say).
+## {trigger, mood, text, tier, repeated, source} with source "lines" (a line
+## from lines.json) or "none" (nothing fits, nothing is said).
 signal line_picked(result: Dictionary)
 
 var bus: Node = null
@@ -58,10 +55,12 @@ var ripple: Object = null
 
 var level_id := ""
 var ctx := {}
-var spirit_lines := {}
 var picker = null
 ## True while the ending choice is on screen (won the ending level, no choice yet).
 var ending_pending := false
+## True once the reveal has been said this game session. Survives level loads
+## and restarts, and is not undone by undo.
+var reveal_played := false
 
 var _batch: Array = []        # triggers raised by the current action
 var _flush_queued := false
@@ -80,8 +79,6 @@ func connect_bus(new_bus: Node) -> void:
 	for event_name in EVENT_TRIGGERS:
 		var trigger: String = EVENT_TRIGGERS[event_name]
 		bus.connect(event_name, func(_event): _on_trigger_event(trigger))
-	if REVEAL_EVENT != "":
-		bus.connect(REVEAL_EVENT, _on_reveal_event)
 	bus.level_won.connect(func(_event): _level_over = true)
 	bus.level_failed.connect(func(_event): _level_over = true)
 	bus.undo_done.connect(func(_event): _on_reset())
@@ -97,12 +94,12 @@ func connect_ripple(new_ripple: Object) -> void:
 
 
 ## A fresh picker for a newly loaded level. meta comes from the level loader;
-## any of act / spirit_mood / mood_weights / spirit_lines it lacks is read
-## from the level JSON at `path`.
+## any of act / spirit_mood / mood_weights it lacks is read from the level
+## JSON at `path`.
 func start_level(new_level_id: String, meta: Dictionary, path: String = "") -> void:
 	level_id = new_level_id
 	var info := meta.duplicate()
-	for key in ["act", "spirit_mood", "mood_weights", "spirit_lines"]:
+	for key in ["act", "spirit_mood", "mood_weights"]:
 		if not info.has(key) and path != "":
 			var raw = JSON.parse_string(FileAccess.get_file_as_string(path))
 			if typeof(raw) == TYPE_DICTIONARY and raw.has(key):
@@ -112,7 +109,6 @@ func start_level(new_level_id: String, meta: Dictionary, path: String = "") -> v
 		"spirit_mood": str(info.get("spirit_mood", "amused")),
 		"mood_weights": info.get("mood_weights", {}),
 	}
-	spirit_lines = info.get("spirit_lines", {})
 	_load_dialogue()
 	picker = Picker.new(_lines_cache, _config_cache, level_id)
 	_on_reset()
@@ -137,11 +133,11 @@ func _on_trigger_event(trigger: String) -> void:
 		ending_pending = true
 		bus.ending_choice_requested.emit(level_id)
 		trigger = "on_choice"
+	elif trigger == "on_solve" and level_id == REVEAL_LEVEL_ID and not reveal_played:
+		# The first win of "The Fuel" carries the reveal.
+		reveal_played = true
+		trigger = "on_reveal"
 	_raise(trigger)
-
-
-func _on_reveal_event(_arg: Variant = null) -> void:
-	_raise("on_reveal")
 
 
 func _raise(trigger: String) -> void:
@@ -175,9 +171,6 @@ func say(trigger: String) -> Dictionary:
 	if not (r["line"] as Dictionary).is_empty():
 		result["text"] = str(r["line"]["text"])
 		result["source"] = "lines"
-	elif USE_LEVEL_SPIRIT_LINES and spirit_lines.has(trigger):
-		result["text"] = str(spirit_lines[trigger])
-		result["source"] = "level"
 	line_picked.emit(result)
 	if result["text"] != "":
 		if ripple != null and ripple.is_playing():

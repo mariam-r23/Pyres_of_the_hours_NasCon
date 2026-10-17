@@ -173,19 +173,64 @@ func test_idle_never_after_win_or_fail_or_during_a_shot() -> bool:
 	return true
 
 
-func test_empty_pick_falls_back_to_level_spirit_lines() -> bool:
-	# on_choice has act 3 lines only, so an act 1 level finds nothing.
+func test_empty_pick_says_nothing_and_ignores_level_spirit_lines() -> bool:
+	# on_choice has act 3 lines only, so an act 1 level finds nothing. Lines
+	# come only from lines.json: a level's spirit_lines are not a fallback.
 	var meta := _l01_meta()
-	meta["spirit_lines"] = {"on_choice": "A fallback from the level."}
+	meta["spirit_lines"] = {"on_choice": "A per-level line that must not be used."}
 	var env := _setup("L01_first_crate", meta)
 	var result: Dictionary = env["director"].say("on_choice")
-	check(DirectorScript.USE_LEVEL_SPIRIT_LINES, "fallback is enabled")
-	check_eq(result["source"], "level", "fell back to spirit_lines")
-	check_eq(env["said"], [["on_choice", result["mood"], "A fallback from the level."]], "the fallback line is said")
-	var none: Dictionary = env["director"].say("on_reveal")
-	check_eq(none["source"], "none", "nothing anywhere")
-	check_eq(env["said"].size(), 1, "an empty pick says nothing")
+	check_eq(result["source"], "none", "nothing fits")
+	check_eq(result["text"], "", "no text")
+	check_eq(env["said"], [], "an empty pick says nothing")
+	# L01's own spirit_lines (on_burn, on_solve) are not used either.
+	_action(env, [BURNED])
+	check_eq(env["said"].size(), 1, "on_burn is said")
+	check(env["said"][0][2] != _l01_meta()["spirit_lines"]["on_burn"], "from lines.json, not the level file")
 	_free(env)
+	return true
+
+
+const REVEAL_META := {"act": 3, "spirit_mood": "menacing", "mood_weights": {"menacing": 1.0}}
+
+
+func test_reveal_on_the_first_l09_win_only() -> bool:
+	var env := _setup(DirectorScript.REVEAL_LEVEL_ID, REVEAL_META)
+	var director: Node = env["director"]
+	check(not director.reveal_played, "not yet")
+	_action(env, [APPLIED, WON])
+	check_eq(_said_triggers(env), ["on_reveal"], "first win: on_reveal")
+	check(director.reveal_played, "flag set")
+	env["bus"].emit_events([UNDO])  # undo out of the win does not reset it
+	env["director"].flush()
+	_action(env, [APPLIED, WON])
+	check_eq(_said_triggers(env), ["on_reveal", "on_undo", "on_solve"], "the replayed win says on_solve")
+	_free(env)
+	return true
+
+
+func test_reveal_flag_survives_restart_and_level_change() -> bool:
+	var env := _setup(DirectorScript.REVEAL_LEVEL_ID, REVEAL_META)
+	var director: Node = env["director"]
+	_action(env, [APPLIED, WON])
+	env["bus"].level_restarted.emit()
+	_action(env, [APPLIED, WON])
+	director.start_level("L08_everything_you_burned", {"act": 2, "spirit_mood": "menacing"})
+	director.start_level(DirectorScript.REVEAL_LEVEL_ID, REVEAL_META)
+	_action(env, [APPLIED, WON])
+	check_eq(_said_triggers(env), ["on_reveal", "on_solve", "on_solve"], "only the very first win reveals")
+	check(director.reveal_played, "still set after a restart and a level change")
+	_free(env)
+	return true
+
+
+func test_other_levels_never_reveal() -> bool:
+	for id in ["L01_first_crate", "L08_everything_you_burned"]:
+		var env := _setup(id, REVEAL_META)
+		_action(env, [APPLIED, WON])
+		check_eq(_said_triggers(env), ["on_solve"], "%s win says on_solve" % id)
+		check(not env["director"].reveal_played, "%s does not use up the reveal" % id)
+		_free(env)
 	return true
 
 
