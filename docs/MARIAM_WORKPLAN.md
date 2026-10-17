@@ -60,7 +60,7 @@ Build UI scenes by hand in the Godot editor. Your AI agent writes the scripts an
   - Transfer: you need a bridge at one hour AND its wood at another, so order matters.
   - Ripple: one burn changes two other rooms, and ashing something too early blocks the solution.
   - Final two levels combine everything and set up act 3.
-- [ ] Set `par_actions` from the solver's shortest solution. Set each level's `spirit_mood`, `act` and optional `mood_weights`, plus 1 or 2 `spirit_lines`.
+- [ ] Set `par_actions` from the solver's shortest solution. Set each level's `spirit_mood`, `act` and optional `mood_weights`.
 - [ ] Tune `actions_per_hour` per level so the day is tight but fair (default 3; solutions around 8 to 15 actions).
 - [ ] Playtest each level with someone who has NOT seen it. Note where they got stuck in `docs/AI_LOG.md`.
 - [ ] Write the remaining lines for acts 2 and 3: her laugh starts to sound different, the reveal ("I'm not escaping the clock, I'm finishing it"), and the final choice.
