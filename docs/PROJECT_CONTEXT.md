@@ -369,7 +369,7 @@ Do not repeat: {last_3_lines}
 7. `GONE` is reserved and unused: treat it as an empty slot.
 8. The validator rejects a shadow placed on a wall. A shadow on a chasm is allowed.
 9. Test command on Anosha's machine: `godot_console --headless -s tests/run_tests.gd`
-10. Shared cases (`tests/cases/*.json`) arrive later through `phase-1`. The runner accepts a file containing a LIST of cases (a single object is also fine); resolves `level` as an id by looking in `levels/data/<id>.json`, then `tests/cases/fixtures/<id>.json`; treats `rejected_at` as a 0-based index into `actions`; and matches rejection `reason` strings exactly.
+10. Shared cases (`tests/cases/*.json`) arrive later through `phase-1`. The runner accepts a file containing a LIST of cases (a single object is also fine); resolves `level` as an id by looking in `levels/data/<id>.json`, then `tests/cases/fixtures/<id>.json`, then `tests/fixtures/<id>.json`; treats `rejected_at` as a 0-based index into `actions`; and matches rejection `reason` strings exactly.
 11. Rejection reasons (agreed; the GDScript core and `pyre_logic/` use these exact strings):
     - `move`: `out_of_bounds`, `blocked_terrain`, `blocked_object`, `shadow_blocks`
     - `interact`: `not_on_stair`, `arrival_blocked`
