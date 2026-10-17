@@ -57,11 +57,17 @@ const WALL_HEIGHT := 0.6
 
 const CELL := 1.0
 
+## Pop-in for an object revealed after the ripple shot lands.
+const POP_TIME := 0.15
+const POP_START_SCALE := 0.6
+
 var grid_w := GameStateScript.DEFAULT_GRID_SIZE
 var grid_h := GameStateScript.DEFAULT_GRID_SIZE
 
 var _content: Node3D = null
 var _materials := {}
+## slot (Vector2i) -> the pivot node holding that slot's object meshes.
+var _object_nodes := {}
 
 
 ## Look of an object: { "color": Color, "emission": Color or null }.
@@ -97,8 +103,10 @@ static func grid_slot_position(slot: Vector2i, grid_size: Vector2i) -> Vector3:
 		(slot.y - (grid_size.y - 1) / 2.0) * CELL)
 
 
-## Full rebuild of this room for `hour` from `state`.
-func refresh(state: GameStateScript, hour: int) -> void:
+## Full rebuild of this room for `hour` from `state`. Objects on
+## `hidden_slots` are not drawn (the ripple shot holds back an arriving ash
+## object until its ember lands); the state itself is untouched.
+func refresh(state: GameStateScript, hour: int, hidden_slots: Array = []) -> void:
 	grid_w = state.grid_w
 	grid_h = state.grid_h
 	if _content != null:
@@ -107,6 +115,7 @@ func refresh(state: GameStateScript, hour: int) -> void:
 	_content = Node3D.new()
 	_content.name = "Content"
 	add_child(_content)
+	_object_nodes = {}
 
 	if state.player_hour == hour:
 		var rim := Vector3(grid_w + 0.5, 0.05, grid_h + 0.5)
@@ -115,7 +124,7 @@ func refresh(state: GameStateScript, hour: int) -> void:
 		for x in grid_w:
 			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
 	for obj in state.objects.values():
-		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE:
+		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE and not hidden_slots.has(obj["slot"]):
 			_draw_object(obj)
 	for sh in state.shadows.values():
 		if sh["hour"] == hour:
@@ -134,8 +143,44 @@ func _draw_terrain(tile: String, slot: Vector2i) -> void:
 		_box(Vector3(0.96, 0.1, 0.96), pos + Vector3(0, -0.05, 0), "floor")
 
 
+## The pivot node of the object drawn on `slot`, or null.
+func object_node_at(slot: Vector2i) -> Node3D:
+	return _object_nodes.get(slot)
+
+
+## Pops the object on `slot` in: scale up with a slight overshoot and fade in.
+func pop_slot(slot: Vector2i) -> void:
+	var pivot := object_node_at(slot)
+	if pivot == null or not pivot.is_inside_tree():
+		return
+	pivot.scale = Vector3.ONE * POP_START_SCALE
+	var tween := pivot.create_tween().set_parallel(true)
+	tween.tween_property(pivot, "scale", Vector3.ONE, POP_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	for child in pivot.get_children():
+		if child is MeshInstance3D and child.material_override is StandardMaterial3D:
+			# Own copy, so the fade does not touch the shared material.
+			var mat: StandardMaterial3D = child.material_override.duplicate()
+			var alpha := mat.albedo_color.a
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.albedo_color.a = 0.0
+			child.material_override = mat
+			tween.tween_property(mat, "albedo_color:a", alpha, POP_TIME)
+
+
+## Draws one object under its own pivot node at its slot (so it can pop in).
 func _draw_object(obj: Dictionary) -> void:
-	var pos := slot_to_position(obj["slot"])
+	var pivot := Node3D.new()
+	pivot.position = slot_to_position(obj["slot"])
+	_content.add_child(pivot)
+	_object_nodes[obj["slot"]] = pivot
+	var room_content := _content
+	_content = pivot
+	_draw_object_meshes(obj)
+	_content = room_content
+
+
+func _draw_object_meshes(obj: Dictionary) -> void:
+	var pos := Vector3.ZERO  # relative to the object's pivot
 	var style := object_style(obj["type"], obj["state"])
 	var burned: bool = obj["state"] == GameStateScript.ASH
 	var size: Vector3

@@ -7,8 +7,13 @@ extends Node3D
 ## holds on the tile where the ash landed, and returns. A small ember mote
 ## rides along with the camera's focus. Under 1.5 s in total.
 ##
-## While a shot plays every key is consumed: the first key press skips it.
-## Code can cancel it at once with cancel() (undo, restart, level load do).
+## The arriving ash object is held back: its target slot is "hidden" (the
+## views skip drawing it) until the ember lands, then slot_revealed fires so
+## the view can pop it in. Only presentation is delayed; the state is not.
+##
+## While a shot plays every key is consumed: the first key press skips it
+## (and reveals at once). cancel() (undo, restart, level load) stops it and
+## clears the hidden set silently, so nothing ever stays hidden.
 ## No game rules here: it only reads events and positions.
 
 const RoomViewScript := preload("res://presentation/room_view.gd")
@@ -16,6 +21,15 @@ const ClockLayoutScript := preload("res://presentation/clock_layout.gd")
 
 signal ripple_started
 signal ripple_finished
+## A held-back slot is visible again (pop it in after the next redraw).
+signal slot_revealed(hour: int, slot: Vector2i)
+## The hidden set changed in any way (redraw needed).
+signal hidden_slots_changed
+
+## Why the last shot stopped: "finished", "skipped" or "cancelled".
+const STOP_FINISHED := "finished"
+const STOP_SKIPPED := "skipped"
+const STOP_CANCELLED := "cancelled"
 
 # --- Overview pose (where the camera rests) ---
 const OVERVIEW_POSITION := Vector3(0, 30, 17)
@@ -55,6 +69,9 @@ var _segment_time := 0.0
 var _playing := false
 var _pending_burn := {}
 var _mote: MeshInstance3D = null
+## hour -> Array of slots whose arriving object is held back.
+var _hidden := {}
+var last_stop_reason := ""
 
 
 func _init() -> void:
@@ -113,7 +130,41 @@ func on_ash_moved(event: Dictionary) -> void:
 		return
 	var burn := _pending_burn
 	_pending_burn = {}
+	if _playing:
+		skip()  # a new shot replaces the old one; reveal what it held
+	_hide(event["to_hour"], event["to_slot"])
 	play(plan_shot(burn["hour"], event["to_hour"], event["to_slot"], grid_size, burn["slot"]))
+
+
+# --- Held-back (hidden) slots ---
+
+## A copy of the hidden set: hour -> Array of slots. Views skip these.
+func hidden_slots() -> Dictionary:
+	return _hidden.duplicate(true)
+
+
+func is_slot_hidden(hour: int, slot: Vector2i) -> bool:
+	return _hidden.has(hour) and _hidden[hour].has(slot)
+
+
+func _hide(hour: int, slot: Vector2i) -> void:
+	if not _hidden.has(hour):
+		_hidden[hour] = []
+	if not _hidden[hour].has(slot):
+		_hidden[hour].append(slot)
+	hidden_slots_changed.emit()
+
+
+## Clears the set first, then announces each slot so views pop it in.
+func _reveal_all() -> void:
+	if _hidden.is_empty():
+		return
+	var revealed := _hidden
+	_hidden = {}
+	hidden_slots_changed.emit()
+	for hour in revealed:
+		for slot in revealed[hour]:
+			slot_revealed.emit(hour, slot)
 
 
 # --- Shot planning (pure, testable) ---
@@ -183,7 +234,7 @@ static func _key(pos: Vector3, look: Vector3, duration: float, easing: String, p
 
 func play(plan: Array) -> void:
 	if _playing:
-		_stop()
+		_stop(STOP_SKIPPED)
 	_plan = plan
 	_segment = 1
 	_segment_time = 0.0
@@ -203,10 +254,14 @@ func advance(delta: float) -> void:
 		_segment_time -= _plan[_segment]["duration"]
 		_segment += 1
 	if _segment >= _plan.size():
-		_stop()
+		_reveal_all()
+		_stop(STOP_FINISHED)
 		return
 	var from: Dictionary = _plan[_segment - 1]
 	var to: Dictionary = _plan[_segment]
+	# The ember has landed once the landing move is done: show the arrival.
+	if to["phase"] in ["hold", "return"]:
+		_reveal_all()
 	var u: float = _segment_time / to["duration"] if to["duration"] > 0.0 else 1.0
 	if to["ease"] == EASE_IN_OUT:
 		u = ease_in_out(u)
@@ -215,16 +270,22 @@ func advance(delta: float) -> void:
 	_update_mote(to["phase"], look, u)
 
 
-## Skips the shot: overview pose at once, mote removed.
+## Skips the shot: overview pose at once, mote removed, arrival revealed.
 func skip() -> void:
+	_reveal_all()
 	if _playing:
-		_stop()
+		_stop(STOP_SKIPPED)
 
 
-## Same as skip(); used when undo, restart or a level load make the shot stale.
+## Stops the shot because undo, restart or a level load made it stale: the
+## hidden set is cleared (no pop) before anyone redraws.
 func cancel() -> void:
-	skip()
+	if not _hidden.is_empty():
+		_hidden = {}
+		hidden_slots_changed.emit()
 	_pending_burn = {}
+	if _playing:
+		_stop(STOP_CANCELLED)
 
 
 ## True if the event was used by the shot (every key while playing; a key
@@ -237,7 +298,8 @@ func consume_input(event: InputEvent) -> bool:
 	return true
 
 
-func _stop() -> void:
+func _stop(reason: String) -> void:
+	last_stop_reason = reason
 	_playing = false
 	_plan = []
 	_remove_mote()

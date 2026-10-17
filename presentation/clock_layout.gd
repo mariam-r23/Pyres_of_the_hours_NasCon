@@ -50,10 +50,18 @@ func room_for_hour(hour: int) -> Node3D:
 	return _rooms.get(hour)
 
 
+## Pops in the object on `slot` in the room for `hour`.
+func pop_slot(hour: int, slot: Vector2i) -> void:
+	var room := room_for_hour(hour)
+	if room != null:
+		room.pop_slot(slot)
+
+
 ## Redraws every room and points the dial hand at the sun hour.
-func refresh_all(state: GameStateScript) -> void:
+## `hidden` maps hour -> Array of slots whose objects are not drawn yet.
+func refresh_all(state: GameStateScript, hidden: Dictionary = {}) -> void:
 	for hour in _rooms:
-		_rooms[hour].refresh(state, hour)
+		_rooms[hour].refresh(state, hour, hidden.get(hour, []))
 	if _hand_pivot != null:
 		# rotation.y turns -Z toward -X for positive angles, so negate for clockwise.
 		_hand_pivot.rotation.y = -hour_angle(sun_hour(state))

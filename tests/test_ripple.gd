@@ -183,3 +183,167 @@ func test_ease_in_out() -> bool:
 	check(is_equal_approx(RippleScript.ease_in_out(0.5), 0.5), "half way at 0.5")
 	check(RippleScript.ease_in_out(0.1) < 0.1, "slow start (not linear)")
 	return true
+
+
+# --- Held-back arrival (hidden slots) ---
+
+const MainScript := preload("res://presentation/main.gd")
+const RoomViewScript := preload("res://presentation/room_view.gd")
+const Loader := preload("res://core/level_loader.gd")
+
+const BURN_AND_ASH := [
+	{"type": "burned", "id": "crate_a", "hour": 12, "slot": Vector2i(2, 2)},
+	{"type": "ash_moved", "from_hour": 12, "to_hour": 2, "to_slot": Vector2i(2, 2), "becomes": "ash_path"},
+	{"type": "action_applied", "actions_used": 2},
+]
+
+
+## A ripple camera on a bus, recording slot_revealed and hidden_slots_changed.
+func _watched_ripple() -> Dictionary:
+	var pair := _ripple_with_bus()
+	var log := {"revealed": [], "changed": 0}
+	pair[1].slot_revealed.connect(func(hour, slot): log["revealed"].append([hour, slot]))
+	pair[1].hidden_slots_changed.connect(func(): log["changed"] += 1)
+	return {"bus": pair[0], "ripple": pair[1], "log": log}
+
+
+func _free_watched(env: Dictionary) -> void:
+	env["ripple"].free()
+	env["bus"].free()
+
+
+func test_target_hidden_until_the_ember_lands() -> bool:
+	var env := _watched_ripple()
+	var ripple: Node3D = env["ripple"]
+	env["bus"].emit_events(BURN_AND_ASH)
+	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "arrival hidden when the shot starts")
+	check_eq(ripple.hidden_slots(), {2: [Vector2i(2, 2)]}, "only the ash target is hidden")
+	check(not ripple.is_slot_hidden(12, Vector2i(2, 2)), "the burned source is not hidden")
+	ripple.advance(0.35)  # mid-glide
+	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "still hidden mid-glide")
+	ripple.advance(0.25)  # 0.60 s: landing done, holding
+	check(not ripple.is_slot_hidden(2, Vector2i(2, 2)), "revealed once the ember lands")
+	check_eq(env["log"]["revealed"], [[2, Vector2i(2, 2)]], "slot_revealed fired once")
+	check(ripple.is_playing(), "the hold is still part of the shot")
+	ripple.advance(2.0)
+	check(not ripple.is_playing(), "finished")
+	check_eq(ripple.last_stop_reason, "finished", "stop reason")
+	check_eq(ripple.hidden_slots(), {}, "nothing hidden after the shot")
+	check_eq(env["log"]["revealed"].size(), 1, "no second reveal")
+	_free_watched(env)
+	return true
+
+
+func test_skip_reveals_at_once() -> bool:
+	var env := _watched_ripple()
+	var ripple: Node3D = env["ripple"]
+	env["bus"].emit_events(BURN_AND_ASH)
+	ripple.advance(0.2)
+	check(ripple.consume_input(_key_event(KEY_SPACE)), "key consumed")
+	check(not ripple.is_playing(), "skipped")
+	check_eq(ripple.last_stop_reason, "skipped", "stop reason")
+	check_eq(ripple.hidden_slots(), {}, "nothing hidden")
+	check_eq(env["log"]["revealed"], [[2, Vector2i(2, 2)]], "skip reveals (with a pop)")
+	_free_watched(env)
+	return true
+
+
+func test_cancel_clears_without_reveal() -> bool:
+	var env := _watched_ripple()
+	var ripple: Node3D = env["ripple"]
+	env["bus"].emit_events(BURN_AND_ASH)
+	var changes_before: int = env["log"]["changed"]
+	ripple.cancel()
+	check_eq(ripple.hidden_slots(), {}, "cleared")
+	check_eq(ripple.last_stop_reason, "cancelled", "stop reason")
+	check_eq(env["log"]["revealed"], [], "no pop: the arrival may not even exist any more")
+	check(env["log"]["changed"] > changes_before, "hidden_slots_changed asks for a redraw")
+	_free_watched(env)
+	return true
+
+
+func test_burn_without_ash_link_hides_nothing() -> bool:
+	var env := _watched_ripple()
+	env["bus"].emit_events([
+		{"type": "burned", "id": "bridge_a", "hour": 12, "slot": Vector2i(1, 2)},
+		{"type": "action_applied", "actions_used": 1},
+	])
+	check_eq(env["ripple"].hidden_slots(), {}, "nothing hidden")
+	check_eq(env["log"]["changed"], 0, "no redraw requested")
+	_free_watched(env)
+	return true
+
+
+func test_room_view_skips_hidden_slots() -> bool:
+	var s: GS = Loader.load_file(L01_PATH)["state"]
+	s.objects["ash"] = {"id": "ash", "type": "ash_path", "hour": 2, "slot": Vector2i(2, 2), "state": GS.INTACT, "flammable": false}
+	var room: Node3D = RoomViewScript.new()
+	room.refresh(s, 2)
+	check(room.object_node_at(Vector2i(2, 2)) != null, "drawn normally")
+	room.refresh(s, 2, [Vector2i(2, 2)])
+	check(room.object_node_at(Vector2i(2, 2)) == null, "not drawn while hidden")
+	check(room.object_node_at(Vector2i(4, 2)) != null, "other objects still drawn")
+	check(s.objects.has("ash"), "the state is untouched")
+	room.free()
+	return true
+
+
+## The real main.gd in the test runner's tree, on the L01 fixture.
+func _main_in_tree() -> Node:
+	var main: Node = MainScript.new()
+	Engine.get_main_loop().root.add_child(main)
+	main.load_entry({"id": "L01_first_crate", "path": L01_PATH})
+	main._refresh()
+	return main
+
+
+func _remove_main(main: Node) -> void:
+	main.get_parent().remove_child(main)
+	main.free()
+
+
+func _burn_into_shot(main: Node) -> void:
+	main.controller.perform({"type": "move", "dir": "right"})
+	main.controller.perform({"type": "burn", "dir": "right"})
+	main._refresh()  # what the deferred redraw does at the end of the frame
+
+
+func test_main_mid_shot_source_shows_arrival_hidden() -> bool:
+	var main := _main_in_tree()
+	_burn_into_shot(main)
+	check(main.ripple.is_playing(), "the shot plays")
+	var source: Node3D = main.clock.room_for_hour(12)
+	var target: Node3D = main.clock.room_for_hour(2)
+	check(source.object_node_at(Vector2i(2, 2)) != null, "the burned crate is drawn in its room")
+	check_eq(main.controller.current_state().objects["crate_a"]["state"], "ASH", "and it is ASH")
+	check(target.object_node_at(Vector2i(2, 2)) == null, "the ash path is held back")
+	main._refresh()  # another redraw mid-shot must not un-hide it
+	check(target.object_node_at(Vector2i(2, 2)) == null, "still held back after a second redraw")
+	check(main.controller.current_state().objects.has("crate_a_ash"), "it exists in the state all along")
+	main.ripple.advance(0.6)
+	main._refresh()
+	check(target.object_node_at(Vector2i(2, 2)) != null, "visible once the ember lands")
+	_remove_main(main)
+	return true
+
+
+func test_main_undo_restart_and_load_mid_shot_leave_nothing_hidden() -> bool:
+	var main := _main_in_tree()
+	_burn_into_shot(main)
+	main.controller.undo()
+	check(not main.ripple.is_playing(), "undo cancels the shot")
+	check_eq(main.ripple.hidden_slots(), {}, "undo leaves nothing hidden")
+	check(is_equal_approx(main._status.modulate.a, 1.0), "HUD restored at once after cancel")
+
+	main.controller.perform({"type": "burn", "dir": "right"})
+	check(main.ripple.is_playing(), "shot again")
+	main.controller.restart()
+	check(not main.ripple.is_playing(), "restart cancels the shot")
+	check_eq(main.ripple.hidden_slots(), {}, "restart leaves nothing hidden")
+
+	_burn_into_shot(main)
+	main.load_entry({"id": "L01_first_crate", "path": L01_PATH})
+	check(not main.ripple.is_playing(), "a level load cancels the shot")
+	check_eq(main.ripple.hidden_slots(), {}, "a level load leaves nothing hidden")
+	_remove_main(main)
+	return true
