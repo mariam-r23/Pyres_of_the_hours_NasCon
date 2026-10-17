@@ -235,6 +235,49 @@ func test_player_on_bridged_chasm() -> bool:
 	return true
 
 
+func test_object_on_wall() -> bool:
+	var data := _base()
+	_obj(data, "exit_1")["slot"] = [0, 0]
+	_expect(_load(data), "object \"exit_1\": placed on a wall at [0, 0] in hour 2", "object on wall")
+	return true
+
+
+func test_non_bridge_object_on_chasm() -> bool:
+	var data := _base()
+	_obj(data, "crate_a").erase("ash_link")
+	_obj(data, "exit_1")["slot"] = [2, 2]
+	_expect(_load(data), "object \"exit_1\": exit placed on a chasm at [2, 2] in hour 2", "exit on chasm")
+	return true
+
+
+func test_bridge_and_ash_path_on_chasm_are_allowed() -> bool:
+	for type in ["bridge", "ash_path"]:
+		var data := _base()
+		_obj(data, "crate_a").erase("ash_link")
+		data["objects"].append({"id": "filler", "type": type, "hour": 2, "slot": [2, 2], "flammable": type == "bridge"})
+		check_eq(Validator.validate(_load(data)), [] as Array[String], type + " on a chasm is fine")
+	return true
+
+
+func test_player_on_intact_blocking_object() -> bool:
+	for type in ["crate", "door"]:
+		var data := _base()
+		data["objects"].append({"id": "blocker", "type": type, "hour": 12, "slot": [0, 1], "flammable": true})
+		data["player"]["slot"] = [0, 1]
+		_expect(_load(data), "player start: [0, 1] in hour 12 holds INTACT %s \"blocker\", which blocks" % type, "player on " + type)
+		# Once burned, it is walkable rubble or an open gate.
+		_obj(data, "blocker")["state"] = "ASH"
+		check_eq(Validator.validate(_load(data)), [] as Array[String], "player on ASH %s is fine" % type)
+	return true
+
+
+func test_shadow_id_equals_object_id() -> bool:
+	var data := _base()
+	data["shadows"][0]["id"] = "crate_a"
+	_expect(_load(data), "shadow \"crate_a\": id is also used by an object", "shadow id clash")
+	return true
+
+
 func test_reports_every_problem_at_once() -> bool:
 	var data := _base()
 	_obj(data, "crate_a")["type"] = "key"

@@ -3,9 +3,10 @@ extends RefCounted
 ## No Nodes, graphics, audio or UI.
 ##
 ## level_loader.gd checks the file FORMAT. This file checks that the level
-## makes sense under the rules: slots inside the grid, known types, one exit,
-## ash links and stairs pointing at usable slots, shadows and the player start
-## on legal tiles.
+## makes sense under the rules: slots inside the grid, objects on legal tiles,
+## known types, one exit, ash links and stairs pointing at usable slots,
+## shadows and the player start on legal tiles, no shadow/object id clashes.
+## Two ash links aimed at the same slot are allowed on purpose (puzzle design).
 ##
 ## validate(state) returns every problem found as a readable string;
 ## an empty array means the level is valid.
@@ -14,6 +15,10 @@ const GameStateScript := preload("res://core/game_state.gd")
 
 ## Object types in the section 3.2 type table (keys and torches are cut).
 const KNOWN_TYPES := ["bridge", "ash_path", "crate", "door", "stair", "exit"]
+## The only types that may sit on a chasm tile.
+const CHASM_TYPES := ["bridge", "ash_path"]
+## Types that block the tile while INTACT.
+const BLOCKING_TYPES := ["crate", "door"]
 const STATES := [GameStateScript.INTACT, GameStateScript.ASH, GameStateScript.GONE]
 
 
@@ -39,7 +44,13 @@ static func _check_objects(state: GameStateScript, ids: Array, errors: Array[Str
 	for id in ids:
 		var obj: Dictionary = state.objects[id]
 		var name := "object \"%s\"" % id
-		_check_place(state, obj["hour"], obj["slot"], name, errors)
+		if _check_place(state, obj["hour"], obj["slot"], name, errors):
+			var where := "%s in hour %d" % [_slot_text(obj["slot"]), obj["hour"]]
+			var tile := state.terrain_at(obj["hour"], obj["slot"])
+			if tile == GameStateScript.WALL:
+				errors.append("%s: placed on a wall at %s" % [name, where])
+			elif tile == GameStateScript.CHASM and not CHASM_TYPES.has(obj["type"]):
+				errors.append("%s: %s placed on a chasm at %s (only a bridge or ash_path may sit on a chasm)" % [name, obj["type"], where])
 		if not KNOWN_TYPES.has(obj["type"]):
 			errors.append("%s: unknown type \"%s\" (known: %s)" % [name, obj["type"], ", ".join(KNOWN_TYPES)])
 		if not STATES.has(obj["state"]):
@@ -99,6 +110,8 @@ static func _check_shadows(state: GameStateScript, errors: Array[String]) -> voi
 	for id in ids:
 		var sh: Dictionary = state.shadows[id]
 		var name := "shadow \"%s\"" % id
+		if state.objects.has(id):
+			errors.append("%s: id is also used by an object (ids must be unique across objects and shadows)" % name)
 		if not _check_place(state, sh["hour"], sh["slot"], name, errors):
 			continue
 		var where := "%s in hour %d" % [_slot_text(sh["slot"]), sh["hour"]]
@@ -115,10 +128,13 @@ static func _check_player_start(state: GameStateScript, errors: Array[String]) -
 		return
 	var where := "%s in hour %d" % [_slot_text(state.player_slot), state.player_hour]
 	var tile := state.terrain_at(state.player_hour, state.player_slot)
+	var obj := state.object_at(state.player_hour, state.player_slot)
 	if tile == GameStateScript.WALL:
 		errors.append("player start: %s is a wall" % where)
-	elif tile == GameStateScript.CHASM and not _fills_chasm(state.object_at(state.player_hour, state.player_slot)):
+	elif tile == GameStateScript.CHASM and not _fills_chasm(obj):
 		errors.append("player start: %s is a chasm with no bridge or ash_path on it" % where)
+	if BLOCKING_TYPES.has(obj.get("type")) and obj["state"] == GameStateScript.INTACT:
+		errors.append("player start: %s holds INTACT %s \"%s\", which blocks" % [where, obj["type"], obj["id"]])
 
 
 ## An INTACT bridge or an ash_path makes a chasm walkable (type table, 3.2).
