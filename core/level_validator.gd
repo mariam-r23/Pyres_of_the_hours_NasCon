@@ -5,7 +5,8 @@ extends RefCounted
 ## level_loader.gd checks the file FORMAT. This file checks that the level
 ## makes sense under the rules: slots inside the grid, objects on legal tiles,
 ## known types, one exit, ash links and stairs pointing at usable slots,
-## shadows and the player start on legal tiles, no shadow/object id clashes.
+## shadows and the player start on legal tiles, no id clashes (shadow vs
+## object, or an object named like the "<id>_ash" object a burn creates).
 ## Two ash links aimed at the same slot are allowed on purpose (puzzle design).
 ##
 ## validate(state) returns every problem found as a readable string;
@@ -13,6 +14,7 @@ extends RefCounted
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
+const AshTransfer := preload("res://core/ash_transfer.gd")
 
 ## Object types in the section 3.2 type table (keys and torches are cut).
 const KNOWN_TYPES := ["bridge", "ash_path", "crate", "door", "stair", "exit"]
@@ -81,6 +83,9 @@ static func _check_ash_link(state: GameStateScript, obj: Dictionary, errors: Arr
 	var name := "object \"%s\" ash_link" % obj["id"]
 	if not KNOWN_TYPES.has(link["becomes"]):
 		errors.append("%s: becomes unknown type \"%s\"" % [name, link["becomes"]])
+	var ash_id: String = obj["id"] + AshTransfer.ASH_ID_SUFFIX
+	if state.objects.has(ash_id):
+		errors.append("object \"%s\": id clashes with the object \"%s\" creates when burned" % [ash_id, obj["id"]])
 	if not _check_place(state, link["hour"], link["slot"], name, errors):
 		return
 	if state.terrain_at(link["hour"], link["slot"]) == GameStateScript.WALL:

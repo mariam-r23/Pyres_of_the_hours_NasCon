@@ -278,6 +278,16 @@ func test_shadow_id_equals_object_id() -> bool:
 	return true
 
 
+func test_ash_id_clash() -> bool:
+	var data := _base()
+	data["objects"].append({"id": "crate_a_ash", "type": "crate", "hour": 4, "slot": [1, 1], "flammable": true})
+	_expect(_load(data), "object \"crate_a_ash\": id clashes with the object \"crate_a\" creates when burned", "ash id clash")
+	# Without an ash link on crate_a, that id is free.
+	_obj(data, "crate_a").erase("ash_link")
+	check_eq(Validator.validate(_load(data)), [] as Array[String], "no link, no clash")
+	return true
+
+
 func test_reports_every_problem_at_once() -> bool:
 	var data := _base()
 	_obj(data, "crate_a")["type"] = "key"
