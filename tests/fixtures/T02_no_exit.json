@@ -1,0 +1,9 @@
+{
+  "id": "T02_no_exit",
+  "title": "Test: loads but fails validation (no exit)",
+  "player": { "hour": 12, "slot": [0, 0] },
+  "objects": [
+    { "id": "crate_a", "type": "crate", "hour": 12, "slot": [1, 0], "state": "INTACT", "flammable": true }
+  ],
+  "shadows": []
+}
