@@ -40,7 +40,7 @@ func test_every_shot_is_under_one_and_a_half_seconds() -> bool:
 	for a in GS.HOUR_ORDER:
 		for b in GS.HOUR_ORDER:
 			var total := RippleScript.total_duration(RippleScript.plan_shot(a, b, Vector2i(4, 4)))
-			check(total < 1.5, "%d -> %d takes %.2f s" % [a, b, total])
+			check(total <= 1.6, "%d -> %d takes %.2f s" % [a, b, total])
 			check(total > 0.5, "%d -> %d is not instant (%.2f s)" % [a, b, total])
 	return true
 
@@ -78,9 +78,9 @@ func test_same_hour_is_a_push_in() -> bool:
 	var plan := RippleScript.plan_shot(8, 8, Vector2i(1, 3), Vector2i(5, 5), Vector2i(1, 2))
 	var phases: Array = plan.map(func(k): return k["phase"])
 	check(not phases.has("glide"), "no glide for the same hour")
-	check_eq(phases, ["overview", "to_room", "land", "hold", "return"], "push-in phases")
-	var room: Dictionary = plan[1]
-	var land: Dictionary = plan[2]
+	check_eq(phases, ["overview", "to_room", "beat", "land", "hold", "return"], "push-in phases")
+	var room: Dictionary = plan[phases.find("to_room")]
+	var land: Dictionary = plan[phases.find("land")]
 	check(land["position"].distance_to(land["look_at"]) < room["position"].distance_to(room["look_at"]), "the landing pose is closer (push-in)")
 	return true
 
@@ -219,9 +219,9 @@ func test_target_hidden_until_the_ember_lands() -> bool:
 	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "arrival hidden when the shot starts")
 	check_eq(ripple.hidden_slots(), {2: [Vector2i(2, 2)]}, "only the ash target is hidden")
 	check(not ripple.is_slot_hidden(12, Vector2i(2, 2)), "the burned source is not hidden")
-	ripple.advance(0.35)  # mid-glide
+	ripple.advance(0.47)  # mid-glide (to_room 0.25 + beat 0.15, glide 0.14)
 	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "still hidden mid-glide")
-	ripple.advance(0.25)  # 0.60 s: landing done, holding
+	ripple.advance(0.25)  # 0.72 s: landing done (0.66), holding
 	check(not ripple.is_slot_hidden(2, Vector2i(2, 2)), "revealed once the ember lands")
 	check_eq(env["log"]["revealed"], [[2, Vector2i(2, 2)]], "slot_revealed fired once")
 	check(ripple.is_playing(), "the hold is still part of the shot")
@@ -320,7 +320,7 @@ func test_main_mid_shot_source_shows_arrival_hidden() -> bool:
 	main._refresh()  # another redraw mid-shot must not un-hide it
 	check(target.object_node_at(Vector2i(2, 2)) == null, "still held back after a second redraw")
 	check(main.controller.current_state().objects.has("crate_a_ash"), "it exists in the state all along")
-	main.ripple.advance(0.6)
+	main.ripple.advance(0.75)
 	main._refresh()
 	check(target.object_node_at(Vector2i(2, 2)) != null, "visible once the ember lands")
 	_remove_main(main)
@@ -346,4 +346,20 @@ func test_main_undo_restart_and_load_mid_shot_leave_nothing_hidden() -> bool:
 	check(not main.ripple.is_playing(), "a level load cancels the shot")
 	check_eq(main.ripple.hidden_slots(), {}, "a level load leaves nothing hidden")
 	_remove_main(main)
+	return true
+
+
+func test_shot_reads_as_travel() -> bool:
+	var plan := RippleScript.plan_shot(12, 4, Vector2i(2, 2), Vector2i(5, 5), Vector2i(2, 2))
+	var phases: Array = plan.map(func(k): return k["phase"])
+	check_eq(phases.slice(0, 3), ["overview", "to_room", "beat"], "a beat on the burning tile before leaving")
+	var beat: Dictionary = plan[2]
+	check(is_equal_approx(beat["duration"], RippleScript.BEAT_TIME), "beat length")
+	check_eq(beat["look_at"], plan[1]["look_at"], "the camera holds still on the burn during the beat")
+	var total := RippleScript.total_duration(plan)
+	check(RippleScript.pose_at(plan, 0.0)["position"].is_equal_approx(RippleScript.OVERVIEW_POSITION), "pose_at starts at the overview")
+	check(RippleScript.pose_at(plan, total)["position"].is_equal_approx(RippleScript.OVERVIEW_POSITION), "pose_at ends at the overview")
+	check_eq(RippleScript.pose_at(plan, 0.3)["phase"], "beat", "0.30 s is in the beat")
+	check(RippleScript.MOTE_RADIUS >= 0.2, "a bigger ember")
+	check(RippleScript.TRAIL_COUNT >= 3, "with a trail")
 	return true

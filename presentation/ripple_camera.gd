@@ -40,18 +40,24 @@ const FOV := 40.0
 const ROOM_OFFSET := Vector3(0, 9.0, 6.0)      # framing one room
 const LANDING_OFFSET := Vector3(0, 6.0, 4.0)   # closer, on the landing tile
 
-# --- Timings (seconds). Worst case (a 180-degree glide) totals 1.37 s. ---
-const TO_ROOM_TIME := 0.25        # overview -> burn room
-const GLIDE_TIME_PER_HOUR := 0.08 # per clock hour travelled (60 degrees = 2 hours)
+# --- Timings (seconds). Worst case (a 180-degree glide) totals 1.54 s. ---
+const TO_ROOM_TIME := 0.25        # overview -> burn room (the burn flash plays)
+const BEAT_TIME := 0.15           # a beat on the burning object before leaving
+const GLIDE_TIME_PER_HOUR := 0.07 # per clock hour travelled (60 degrees = 2 hours)
 const LAND_TIME := 0.12           # target room -> landing tile
-const HOLD_TIME := 0.22           # rest on the landing tile (mote fades)
+const HOLD_TIME := 0.30           # rest on the landing tile (pop + puff, mote fades)
 const RETURN_TIME := 0.30         # back to the overview
 const ARC_SAMPLES_PER_HOUR := 2   # keyframes per clock hour along the arc
 
-# --- Ember mote (placeholder for Noor's VFX) ---
-const MOTE_RADIUS := 0.12
+# --- Ember mote, trail and flashes (placeholders for Noor's VFX) ---
+const MOTE_RADIUS := 0.2
 const MOTE_HEIGHT := 0.6
-const MOTE_ENERGY := 3.0
+const MOTE_ENERGY := 5.0
+const TRAIL_COUNT := 6            # fading copies behind the ember
+const TRAIL_SPACING := 0.03       # seconds of path between trail copies
+const FLASH_TIME := 0.35          # burn flash / landing puff duration
+const BURN_FLASH_SIZE := 1.1      # final radius of the burn flash
+const LANDING_PUFF_SIZE := 0.6
 
 ## Ease modes for a keyframe's segment.
 const EASE_IN_OUT := "in_out"
@@ -64,11 +70,13 @@ var grid_size := Vector2i(5, 5)
 
 var camera: Camera3D
 var _plan: Array = []
-var _segment := 0
-var _segment_time := 0.0
+var _time := 0.0
+var _duration := 0.0
 var _playing := false
 var _pending_burn := {}
 var _mote: MeshInstance3D = null
+var _trail: Array = []    # MeshInstance3D copies behind the mote
+var _flashes: Array = []  # live burn flash / landing puff nodes
 ## hour -> Array of slots whose arriving object is held back.
 var _hidden := {}
 var last_stop_reason := ""
@@ -184,6 +192,7 @@ static func plan_shot(from_hour: int, to_hour: int, to_slot: Vector2i,
 
 	var plan: Array = [_key(OVERVIEW_POSITION, OVERVIEW_LOOK, 0.0, LINEAR, "overview")]
 	plan.append(_key(start_focus + ROOM_OFFSET, start_focus, TO_ROOM_TIME, EASE_IN_OUT, "to_room"))
+	plan.append(_key(start_focus + ROOM_OFFSET, start_focus, BEAT_TIME, LINEAR, "beat"))
 
 	if from_hour != to_hour:
 		var a0 := ClockLayoutScript.hour_angle(from_hour)
@@ -214,6 +223,29 @@ static func plan_shot(from_hour: int, to_hour: int, to_slot: Vector2i,
 	return plan
 
 
+## The camera pose at `t` seconds into `plan`:
+## { position, look_at, phase, u } where u is the eased 0..1 progress
+## through the current keyframe's segment. Pure: used by playback and trail.
+static func pose_at(plan: Array, t: float) -> Dictionary:
+	var elapsed := 0.0
+	for i in range(1, plan.size()):
+		var key: Dictionary = plan[i]
+		var d: float = key["duration"]
+		if t < elapsed + d or i == plan.size() - 1:
+			var u := 1.0 if d <= 0.0 else clampf((t - elapsed) / d, 0.0, 1.0)
+			if key["ease"] == EASE_IN_OUT:
+				u = ease_in_out(u)
+			var prev: Dictionary = plan[i - 1]
+			return {
+				"position": prev["position"].lerp(key["position"], u),
+				"look_at": prev["look_at"].lerp(key["look_at"], u),
+				"phase": key["phase"],
+				"u": u,
+			}
+		elapsed += d
+	return {"position": plan[0]["position"], "look_at": plan[0]["look_at"], "phase": plan[0]["phase"], "u": 1.0}
+
+
 static func total_duration(plan: Array) -> float:
 	var total := 0.0
 	for key in plan:
@@ -236,10 +268,12 @@ func play(plan: Array) -> void:
 	if _playing:
 		_stop(STOP_SKIPPED)
 	_plan = plan
-	_segment = 1
-	_segment_time = 0.0
+	_time = 0.0
+	_duration = total_duration(plan)
 	_playing = true
 	_spawn_mote()
+	if plan.size() > 1:
+		_spawn_flash(plan[1]["look_at"], BURN_FLASH_SIZE)  # the burn, on its tile
 	ripple_started.emit()
 	advance(0.0)
 
@@ -249,25 +283,18 @@ func play(plan: Array) -> void:
 func advance(delta: float) -> void:
 	if not _playing:
 		return
-	_segment_time += delta
-	while _segment < _plan.size() and _segment_time >= _plan[_segment]["duration"]:
-		_segment_time -= _plan[_segment]["duration"]
-		_segment += 1
-	if _segment >= _plan.size():
+	_time += delta
+	if _time >= _duration:
 		_reveal_all()
 		_stop(STOP_FINISHED)
 		return
-	var from: Dictionary = _plan[_segment - 1]
-	var to: Dictionary = _plan[_segment]
+	var pose := pose_at(_plan, _time)
 	# The ember has landed once the landing move is done: show the arrival.
-	if to["phase"] in ["hold", "return"]:
+	if pose["phase"] in ["hold", "return"] and not _hidden.is_empty():
+		_spawn_flash(pose["look_at"], LANDING_PUFF_SIZE)
 		_reveal_all()
-	var u: float = _segment_time / to["duration"] if to["duration"] > 0.0 else 1.0
-	if to["ease"] == EASE_IN_OUT:
-		u = ease_in_out(u)
-	var look: Vector3 = from["look_at"].lerp(to["look_at"], u)
-	_apply_pose(from["position"].lerp(to["position"], u), look)
-	_update_mote(to["phase"], look, u)
+	_apply_pose(pose["position"], pose["look_at"])
+	_update_mote(pose)
 
 
 ## Skips the shot: overview pose at once, mote removed, arrival revealed.
@@ -313,48 +340,95 @@ func _apply_pose(pos: Vector3, look: Vector3) -> void:
 		camera.look_at(look)
 
 
-# --- Ember mote (placeholder; Noor's VFX replaces this function) ---
+# --- Ember mote, trail and flashes (placeholders; Noor's VFX replaces these) ---
+
+func _glow_material(alpha: float, energy: float) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	var fire: Color = RoomViewScript.COLORS["fire"]  # it IS fire
+	mat.albedo_color = Color(fire, alpha)
+	mat.emission_enabled = true
+	mat.emission = fire
+	mat.emission_energy_multiplier = energy
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return mat
+
+
+func _sphere_node(radius: float, mat: Material) -> MeshInstance3D:
+	var sphere := SphereMesh.new()
+	sphere.radius = radius
+	sphere.height = radius * 2.0
+	var node := MeshInstance3D.new()
+	node.mesh = sphere
+	node.material_override = mat
+	add_child(node)
+	return node
+
 
 func _spawn_mote() -> void:
 	_remove_mote()
-	var sphere := SphereMesh.new()
-	sphere.radius = MOTE_RADIUS
-	sphere.height = MOTE_RADIUS * 2.0
-	var mat := StandardMaterial3D.new()
-	var fire: Color = RoomViewScript.COLORS["fire"]  # it IS fire
-	mat.albedo_color = fire
-	mat.emission_enabled = true
-	mat.emission = fire
-	mat.emission_energy_multiplier = MOTE_ENERGY
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_mote = MeshInstance3D.new()
+	_mote = _sphere_node(MOTE_RADIUS, _glow_material(1.0, MOTE_ENERGY))
 	_mote.name = "AshMote"
-	_mote.mesh = sphere
-	_mote.material_override = mat
 	_mote.visible = false
-	add_child(_mote)
+	for i in TRAIL_COUNT:
+		var fade := 1.0 - float(i + 1) / (TRAIL_COUNT + 1)
+		var ghost := _sphere_node(MOTE_RADIUS * (0.4 + 0.5 * fade), _glow_material(0.6 * fade, MOTE_ENERGY * fade))
+		ghost.visible = false
+		_trail.append(ghost)
 
 
-## The mote rides the camera's focus from the burn room to the landing tile,
-## then fades out during the hold.
-func _update_mote(phase: String, focus: Vector3, u: float) -> void:
+## The mote rises off the burning tile during the beat, rides the camera's
+## focus to the landing tile with a trail behind it, then fades in the hold.
+func _update_mote(pose: Dictionary) -> void:
 	if _mote == null:
 		return
-	_mote.visible = phase in ["glide", "land", "hold"]
-	_mote.position = focus + Vector3(0, MOTE_HEIGHT, 0)
-	var mat: StandardMaterial3D = _mote.material_override
+	var phase: String = pose["phase"]
+	var u: float = pose["u"]
+	_mote.visible = phase in ["beat", "glide", "land", "hold"]
+	var lift := MOTE_HEIGHT * u if phase == "beat" else MOTE_HEIGHT
+	_mote.position = pose["look_at"] + Vector3(0, lift, 0)
 	var alpha := 1.0 - u if phase == "hold" else 1.0
+	var mat: StandardMaterial3D = _mote.material_override
 	mat.albedo_color.a = alpha
 	mat.emission_energy_multiplier = MOTE_ENERGY * alpha
-	if phase == "return":
-		_mote.visible = false
+	# Trail: where the ember was a moment ago, only while it travels.
+	var travelling := phase in ["glide", "land"]
+	for i in _trail.size():
+		var past := pose_at(_plan, _time - (i + 1) * TRAIL_SPACING)
+		_trail[i].visible = travelling and past["phase"] in ["beat", "glide", "land"]
+		_trail[i].position = past["look_at"] + Vector3(0, MOTE_HEIGHT, 0)
+
+
+## A quick fire flash at `at` that grows to `size` and fades out.
+func _spawn_flash(at: Vector3, size: float) -> void:
+	if not is_inside_tree():
+		return
+	var mat := _glow_material(0.85, MOTE_ENERGY)
+	var flash := _sphere_node(size, mat)
+	flash.name = "Flash"
+	flash.position = at + Vector3(0, 0.3, 0)
+	flash.scale = Vector3.ONE * 0.2
+	_flashes.append(flash)
+	var tween := flash.create_tween().set_parallel(true)
+	tween.tween_property(flash, "scale", Vector3.ONE, FLASH_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, FLASH_TIME)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, FLASH_TIME)
+	tween.chain().tween_callback(func(): _free_flash(flash))
+
+
+func _free_flash(flash: Node) -> void:
+	_flashes.erase(flash)
+	if is_instance_valid(flash):
+		flash.queue_free()
 
 
 func _remove_mote() -> void:
-	if _mote != null:
-		if _mote.is_inside_tree():
-			_mote.queue_free()
-		else:
-			_mote.free()
-		_mote = null
+	for node in [_mote] + _trail + _flashes:
+		if node != null and is_instance_valid(node):
+			if node.is_inside_tree():
+				node.queue_free()
+			else:
+				node.free()
+	_mote = null
+	_trail = []
+	_flashes = []
