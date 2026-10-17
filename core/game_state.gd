@@ -15,6 +15,11 @@ const INTACT := "INTACT"
 const ASH := "ASH"
 const GONE := "GONE"  # reserved and unused; behaves like an empty slot
 
+## Level status. Anything but PLAYING is over: every action is rejected.
+const PLAYING := "playing"
+const WON := "won"
+const FAILED := "failed"
+
 const DEFAULT_GRID_SIZE := 5
 const DEFAULT_ACTIONS_PER_HOUR := 3
 
@@ -40,9 +45,7 @@ var shadows: Dictionary = {}
 var player_hour: int = 12
 var player_slot: Vector2i = Vector2i.ZERO
 var action_count: int = 0
-var won: bool = false
-var failed: bool = false
-var fail_reason: String = ""
+var status: String = PLAYING
 
 
 func _init(w: int = DEFAULT_GRID_SIZE, h: int = DEFAULT_GRID_SIZE) -> void:
@@ -107,9 +110,7 @@ func duplicate_deep() -> GameState:
 	copy.player_hour = player_hour
 	copy.player_slot = player_slot
 	copy.action_count = action_count
-	copy.won = won
-	copy.failed = failed
-	copy.fail_reason = fail_reason
+	copy.status = status
 	return copy
 
 
@@ -124,7 +125,7 @@ func hash_key() -> String:
 		parts.append("T%d=%s" % [hour, "/".join(PackedStringArray(terrain[hour]))])
 	parts.append("P=%d@%s" % [player_hour, _slot_key(player_slot)])
 	parts.append("N=%d" % action_count)
-	parts.append("E=%d%d%s" % [int(won), int(failed), fail_reason])
+	parts.append("E=%s" % status)
 	var ids := objects.keys()
 	ids.sort()
 	for id in ids:

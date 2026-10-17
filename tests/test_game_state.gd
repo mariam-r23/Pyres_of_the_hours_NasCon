@@ -96,7 +96,7 @@ func test_duplicate_deep_shares_nothing() -> bool:
 	c.objects["new"] = {"id": "new", "type": "ash_path", "hour": 2, "slot": Vector2i(2, 2), "state": GS.INTACT, "flammable": false}
 	c.player_slot = Vector2i(1, 2)
 	c.action_count = 9
-	c.won = true
+	c.status = GS.WON
 	check_eq(s.hash_key(), before, "original unchanged after editing the copy")
 	check_eq(s.objects["crate_a"]["state"], GS.INTACT, "object state")
 	check_eq(s.objects["crate_a"]["ash_link"]["becomes"], "ash_path", "nested ash_link")
@@ -113,9 +113,8 @@ func test_hash_key_detects_changes() -> bool:
 		"action count": func(s: GS): s.action_count = 1,
 		"object state": func(s: GS): s.objects["crate_a"]["state"] = GS.ASH,
 		"shadow destroyed": func(s: GS): s.shadows.erase("sh_1"),
-		"won": func(s: GS): s.won = true,
-		"failed": func(s: GS): s.failed = true,
-		"fail reason": func(s: GS): s.fail_reason = "dial_complete",
+		"status won": func(s: GS): s.status = GS.WON,
+		"status failed": func(s: GS): s.status = GS.FAILED,
 		"terrain": func(s: GS): s.terrain[12][0] = "#....",
 		"new object": func(s: GS): s.objects["p"] = {"id": "p", "type": "ash_path", "hour": 2, "slot": Vector2i(2, 2), "state": GS.INTACT, "flammable": false},
 	}

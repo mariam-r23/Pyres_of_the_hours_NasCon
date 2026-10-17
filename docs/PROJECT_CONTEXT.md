@@ -377,5 +377,15 @@ Do not repeat: {last_3_lines}
     - any action: `shadow_wakes_on_you`
     - after win or fail: `level_over`
     - malformed action (unknown type or direction): `unknown_action`
-12. `apply_action(state, action)` never modifies the state passed in. On success it returns a NEW deep copy with the action applied, the action counter +1, and `action_applied` as the LAST event. On rejection it returns `ok = false`, the original state unchanged, a `reason`, and `events` containing only `{"type": "action_rejected", "reason": ...}`.
+12. `apply_action(state, action)` never modifies the state passed in. On success it returns a NEW deep copy with the action applied, the action counter +1, and `action_applied` as the last of the action's own events (only `level_won` or `level_failed` may follow it, see item 14). On rejection it returns `ok = false`, the original state unchanged, a `reason`, and `events` containing only `{"type": "action_rejected", "reason": ...}`.
 13. An object created by an ash link gets the id `<source id>_ash` and its `flammable` flag from the default table by type in `core/walkability.gd` (`DEFAULT_FLAMMABLE`: bridge, crate, door = true; ash_path, stair, exit = false). That table is the only copy. Level files still set `flammable` on every object they list.
+14. Event order for a valid action:
+    1. the action's own events: `moved` (move, interact), or `burned`, `ash_moved` (if linked), `shadow_destroyed` (one per destroyed shadow, in neighbour order: up, down, left, right)
+    2. `sun_advanced` (`from_index`, `to_index`) if the sun index changed
+    3. `hour_passed` (`hour`) for each newly passed hour, in sun order
+    4. `shadow_appeared` (`id`, `hour`, `slot`) for each shadow in a newly passed hour, sorted by id
+    5. `action_applied` (`actions_used`)
+    6. then, if the action ended the level: `level_won` (`actions_used`) or `level_failed` (`reason: "dial_complete"`). Win beats fail.
+
+    Shadows active at load time (hours already passed by `sun.start_index`) emit no events. Shadow checks during an action (blocking, ash target, stair arrival, which shadows a burn destroys) use the sun BEFORE the action; `shadow_wakes_on_you` checks the player's position AFTER the action against shadows in newly passed hours. A destroyed shadow is removed from the state.
+15. `GameState.status` is `"playing"`, `"won"` or `"failed"` (it replaces the old won/failed flags) and is part of `duplicate_deep()` and `hash_key()`. While it is not `"playing"`, every action (including `wait`) is rejected with `level_over` and `legal_actions()` returns `[]`.

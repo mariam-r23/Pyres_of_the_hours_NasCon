@@ -11,10 +11,9 @@ extends RefCounted
 ##   the action's own events (moved | burned, ash_moved, shadow_destroyed),
 ##   sun_advanced, hour_passed (each newly passed hour),
 ##   shadow_appeared (each surviving shadow in a newly passed hour),
-##   action_applied (last)
-##
-## Implemented so far: move, wait, interact, burn + ash transfer, sun, shadows.
-## Still to come: win/fail and level_over (see TODOs).
+##   action_applied (last of the action's events),
+##   then level_won or level_failed if the action ended the level.
+## Once the level is won or failed, every action is rejected with level_over.
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Walkability := preload("res://core/walkability.gd")
@@ -36,10 +35,13 @@ const REASON_ARRIVAL_BLOCKED := "arrival_blocked"
 const REASON_SHADOW_BLOCKS := "shadow_blocks"
 const REASON_SHADOW_WAKES_ON_YOU := "shadow_wakes_on_you"
 const REASON_UNKNOWN_ACTION := "unknown_action"
+const REASON_LEVEL_OVER := "level_over"
+const FAIL_DIAL_COMPLETE := "dial_complete"
 
 
 static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
-	# TODO(part B): if the level is won or failed, reject with "level_over".
+	if state.status != GameStateScript.PLAYING:
+		return _reject(state, REASON_LEVEL_OVER)
 	if typeof(action) != TYPE_DICTIONARY:
 		return _reject(state, REASON_UNKNOWN_ACTION)
 
@@ -113,15 +115,25 @@ static func apply_action(state: GameStateScript, action: Variant) -> Dictionary:
 		events.append({"type": "shadow_appeared", "id": sh["id"], "hour": sh["hour"], "slot": sh["slot"]})
 
 	events.append({"type": "action_applied", "actions_used": new_state.action_count})
-	# TODO(part B): player on an INTACT exit -> won + level_won; else dial
-	# complete -> failed + level_failed ("dial_complete"). After action_applied.
+
+	# Win beats fail (3.5): reaching the exit on the action that completes
+	# the dial still wins. Terminal events come after action_applied.
+	var on_tile := new_state.object_at(new_state.player_hour, new_state.player_slot)
+	if on_tile.get("type") == "exit" and on_tile["state"] == GameStateScript.INTACT:
+		new_state.status = GameStateScript.WON
+		events.append({"type": "level_won", "actions_used": new_state.action_count})
+	elif Sun.is_dial_complete(new_state):
+		new_state.status = GameStateScript.FAILED
+		events.append({"type": "level_failed", "reason": FAIL_DIAL_COMPLETE})
 	return {"ok": true, "events": events, "state": new_state, "reason": ""}
 
 
 ## Every action that apply_action would accept right now, in a fixed order:
 ## move up/down/left/right, burn up/down/left/right, interact, wait.
-## Never includes an invalid action.
+## Never includes an invalid action; empty once the level is won or failed.
 static func legal_actions(state: GameStateScript) -> Array:
+	if state.status != GameStateScript.PLAYING:
+		return []
 	var candidates: Array = []
 	for dir in DIRECTION_ORDER:
 		candidates.append({"type": "move", "dir": dir})
