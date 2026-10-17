@@ -1,0 +1,29 @@
+{
+  "name": "Wake the Shadow",
+  "actions_per_hour": 3,
+  "width": 5,
+  "height": 3,
+  "hours": {
+    "0": [".....", ".....", "....."],
+    "1": ["..#..", ".....", "..#.."],
+    "2": ["..#..", "..~~E", "..#.."]
+  },
+  "player": { "hour": 0, "x": 0, "y": 1 },
+  "objects": [
+    {
+      "id": "plank1", "type": "plank", "hour": 0, "x": 2, "y": 0,
+      "ash_link": { "hour": 2, "x": 2, "y": 1, "new_type": "ash_bridge" }
+    },
+    {
+      "id": "gate1", "type": "gate", "hour": 1, "x": 2, "y": 1,
+      "ash_link": { "hour": 2, "x": 3, "y": 1, "new_type": "ash_bridge" }
+    }
+  ],
+  "shadows": [
+    { "id": "sh1", "hour": 1, "x": 3, "y": 1 }
+  ],
+  "doorways": [
+    { "a": { "hour": 0, "x": 4, "y": 1 }, "b": { "hour": 1, "x": 0, "y": 1 } },
+    { "a": { "hour": 1, "x": 4, "y": 1 }, "b": { "hour": 2, "x": 0, "y": 1 } }
+  ]
+}
