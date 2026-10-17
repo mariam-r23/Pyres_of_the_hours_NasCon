@@ -85,10 +85,16 @@ func slot_to_position(slot: Vector2i) -> Vector3:
 		var marker := slots.get_node_or_null("slot_%d_%d" % [slot.x, slot.y]) as Node3D
 		if marker != null:
 			return (slots as Node3D).transform * marker.position
+	return grid_slot_position(slot, Vector2i(grid_w, grid_h))
+
+
+## Grid math only (no Slots markers): 1 unit per cell, room centered on its
+## origin. Used by slot_to_position and by the ripple camera's shot planning.
+static func grid_slot_position(slot: Vector2i, grid_size: Vector2i) -> Vector3:
 	return Vector3(
-		(slot.x - (grid_w - 1) / 2.0) * CELL,
+		(slot.x - (grid_size.x - 1) / 2.0) * CELL,
 		0.0,
-		(slot.y - (grid_h - 1) / 2.0) * CELL)
+		(slot.y - (grid_size.y - 1) / 2.0) * CELL)
 
 
 ## Full rebuild of this room for `hour` from `state`.
