@@ -11,6 +11,7 @@ const RoomViewScript := preload("res://presentation/room_view.gd")
 const LevelList := preload("res://presentation/level_list.gd")
 const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
 const SpiritDirectorScript := preload("res://presentation/spirit_director.gd")
+const FxQueueScript := preload("res://presentation/fx_queue.gd")
 const Sun := preload("res://core/sun.gd")
 
 const WON_NEXT_TEXT := "You reached the exit.\nPress N for the next level, R to restart."
@@ -91,6 +92,10 @@ var _speech_tween: Tween
 var _loading_path := ""
 ## The placeholder ending line once a choice is made ("" before).
 var _ending_text := ""
+## Shadow rise / dissipate animations, held while the ripple shot plays.
+var fx := FxQueueScript.new()
+## True when the next redraw should tween passed-hour grades (an hour passed).
+var _animate_grades := false
 
 
 func _ready() -> void:
@@ -130,6 +135,16 @@ func _ready() -> void:
 	director.connect_bus(bus)
 	director.connect_ripple(ripple)
 	add_child(director)
+
+	# Passed hours tween to their new grade; shadows rise and dissipate.
+	fx.blocker = ripple
+	bus.hour_passed.connect(func(_event): _animate_grades = true)
+	bus.shadow_appeared.connect(func(event): fx.push({"kind": "rise", "hour": event["hour"], "id": event["id"]}))
+	bus.shadow_destroyed.connect(_on_shadow_destroyed)
+	ripple.ripple_finished.connect(_queue_refresh)  # play what the shot held back
+	bus.undo_done.connect(func(_event): _snap_and_drop_fx())
+	bus.level_restarted.connect(_snap_and_drop_fx)
+	bus.level_loaded.connect(func(_meta): _snap_and_drop_fx())
 
 	_build_ui()
 	ripple.ripple_started.connect(func(): fade_hud(0.0, HUD_FADE_TIME))
@@ -282,8 +297,16 @@ func _refresh() -> void:
 	if state == null:
 		return
 	# The hidden set is read here, at draw time, so a redraw during the shot
-	# can never show the arriving ash object early.
-	clock.refresh_all(state, ripple.hidden_slots())
+	# can never show the arriving ash object early. Shadow animations wait
+	# for the shot too (take_ready() is empty while it plays).
+	var animations := fx.take_ready()
+	clock.refresh_all(state, ripple.hidden_slots(), _animate_grades, fx.hidden_shadow_ids())
+	_animate_grades = false
+	for item in animations:
+		if item["kind"] == "rise":
+			clock.room_for_hour(item["hour"]).rise_shadow(item["id"])
+		else:
+			RoomViewScript.dissipate_ghost(item["ghost"])
 	for pop in _pending_pops:
 		if not ripple.is_slot_hidden(pop[0], pop[1]):
 			clock.pop_slot(pop[0], pop[1])
@@ -348,6 +371,23 @@ func _on_ending_chosen(choice: String) -> void:
 	if ENDING_TEXTS.has(choice):
 		_ending_text = ENDING_TEXTS[choice]
 		_queue_refresh()
+
+
+## The shadow is already gone from the state: keep a ghost where it stood
+## (its slot from the last redraw) and let it dissipate.
+func _on_shadow_destroyed(event: Dictionary) -> void:
+	var room: Node3D = clock.room_for_hour(event["hour"])
+	var ghost: Node3D = room.add_shadow_ghost(room.last_shadow_slot(event["id"]))
+	if ghost != null:
+		fx.push({"kind": "dissipate", "hour": event["hour"], "id": event["id"], "ghost": ghost})
+
+
+## Undo, restart, level load: grades snap, queued shadow animations go.
+func _snap_and_drop_fx() -> void:
+	_animate_grades = false
+	for item in fx.drop():
+		if item.has("ghost") and is_instance_valid(item["ghost"]):
+			item["ghost"].queue_free()
 
 
 func _on_slot_revealed(hour: int, slot: Vector2i) -> void:

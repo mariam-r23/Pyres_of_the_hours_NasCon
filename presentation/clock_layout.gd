@@ -66,10 +66,13 @@ func hand_direction() -> Vector3:
 
 
 ## Redraws every room and points the dial hand at the sun hour.
-## `hidden` maps hour -> Array of slots whose objects are not drawn yet.
-func refresh_all(state: GameStateScript, hidden: Dictionary = {}) -> void:
+## `hidden` maps hour -> Array of slots whose objects are not drawn yet;
+## `hidden_shadows` lists shadow ids waiting to rise. `animate_grades`
+## tweens rooms whose passed-hour grade changed (else they snap).
+func refresh_all(state: GameStateScript, hidden: Dictionary = {}, animate_grades: bool = false,
+		hidden_shadows: Array = []) -> void:
 	for hour in _rooms:
-		_rooms[hour].refresh(state, hour, hidden.get(hour, []))
+		_rooms[hour].refresh(state, hour, hidden.get(hour, []), animate_grades, hidden_shadows)
 	if _hand_pivot != null:
 		# rotation.y turns -Z toward -X for positive angles, so negate for clockwise.
 		_hand_pivot.rotation.y = -hour_angle(sun_hour(state))

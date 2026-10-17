@@ -81,13 +81,109 @@ const RING_RADII_ON_MOUND := Vector2(0.26, 0.31)
 ## Ash path cracks: (x, z, angle in degrees, length).
 const CRACKS := [Vector4(-0.12, -0.1, 25, 0.55), Vector4(0.14, 0.12, -40, 0.5), Vector4(0.0, 0.25, 80, 0.3)]
 
+## Passed-hour grade: ALL values here, so Noor's assets can replace them in
+## one place. Rooms the sun has passed get darker and sootier with each hour
+## since ("depth"); the room the sun is on now is slightly brighter. Shadows,
+## the player and the active-room rim are never graded (always readable).
+const GRADE := {
+	"current_brightness": 1.12,      # the "now" room
+	"passed_brightness_step": 0.09,  # darker per hour since it passed
+	"passed_brightness_min": 0.62,   # never darker than this: still playable
+	"passed_emission_step": 0.15,    # glow (markers, embers) fades per hour
+	"passed_emission_min": 0.4,
+	"soot_per_depth": 3,             # soot specks added per hour since
+	"soot_max": 12,
+	"soot_color": Color(0.03, 0.03, 0.035, 0.8),
+	"soot_size_min": 0.14,
+	"soot_size_max": 0.32,
+	"transition_time": 0.4,          # tween to the new grade on hour_passed
+}
+
+## Shadow animations.
+const SHADOW_RISE_TIME := 0.3
+const SHADOW_RISE_START := Vector3(0.6, 0.05, 0.6)
+const SHADOW_DISSIPATE_TIME := 0.25
+const SHADOW_DISSIPATE_END := Vector3(0.35, 0.35, 0.35)
+
 var grid_w := GameStateScript.DEFAULT_GRID_SIZE
 var grid_h := GameStateScript.DEFAULT_GRID_SIZE
 
 var _content: Node3D = null
+var _fx_root: Node3D = null      # ghosts that outlive a redraw (dissipating shadows)
 var _materials := {}
+## material -> {"color", "energy", "graded"}: the ungraded values.
+var _material_base := {}
 ## slot (Vector2i) -> the pivot node holding that slot's object meshes.
 var _object_nodes := {}
+## shadow id -> pivot node / slot, from the last redraw.
+var _shadow_nodes := {}
+var _shadow_slots := {}
+## The grade currently shown {brightness, emission, soot} and the one aimed at.
+var _shown_grade := {}
+var _target_grade := {}
+var _grade_tween: Tween = null
+var _soot_fresh_material: StandardMaterial3D = null
+var _soot_count_before := 0
+
+
+## How the sun has treated this room: passed (and how many hours ago:
+## depth 1 = the hour that just passed) or current (the sun is on it now).
+## Reads core/sun.gd only.
+static func room_mood(state: GameStateScript, hour: int) -> Dictionary:
+	var index := GameStateScript.order_index(hour)
+	var sun := Sun.sun_index(state)
+	var passed := index >= 0 and index < sun
+	return {
+		"passed": passed,
+		"current": index >= 0 and index == sun,
+		"depth": sun - index if passed else 0,
+	}
+
+
+## The grade values for a mood: {brightness, emission, soot}.
+static func grade_for(mood: Dictionary) -> Dictionary:
+	if mood["passed"]:
+		var depth: int = mood["depth"]
+		return {
+			"brightness": maxf(GRADE["passed_brightness_min"], 1.0 - GRADE["passed_brightness_step"] * depth),
+			"emission": maxf(GRADE["passed_emission_min"], 1.0 - GRADE["passed_emission_step"] * depth),
+			"soot": mini(GRADE["soot_max"], GRADE["soot_per_depth"] * depth),
+		}
+	if mood["current"]:
+		return {"brightness": GRADE["current_brightness"], "emission": 1.0, "soot": 0}
+	return {"brightness": 1.0, "emission": 1.0, "soot": 0}
+
+
+## Deterministic soot spots for a room: [{slot, offset (x, z), size, angle}].
+## Seeded from the hour and the speck index (no randf), so the same room
+## always gets the same soot.
+static func soot_spots(hour: int, count: int, grid: Vector2i) -> Array:
+	var spots: Array = []
+	for i in count:
+		var h := _hash(hour * 7919 + i * 104729 + 17)
+		var slot := Vector2i(h % grid.x, (h >> 8) % grid.y)
+		var h2 := _hash(h ^ (slot.x * 31 + slot.y * 131))
+		spots.append({
+			"slot": slot,
+			"offset": Vector2(((h2 & 255) / 255.0 - 0.5) * 0.6, (((h2 >> 8) & 255) / 255.0 - 0.5) * 0.6),
+			"size": lerpf(GRADE["soot_size_min"], GRADE["soot_size_max"], ((h2 >> 16) & 255) / 255.0),
+			"angle": float((h2 >> 24) & 255) / 255.0 * 180.0,
+		})
+	return spots
+
+
+## A small integer hash (deterministic, 32-bit).
+static func _hash(n: int) -> int:
+	var h := (n * 2654435761) & 0xFFFFFFFF
+	h ^= h >> 15
+	h = (h * 2246822519) & 0xFFFFFFFF
+	h ^= h >> 13
+	return h & 0x7FFFFFFF
+
+
+## The grade currently shown (after any running transition step).
+func grade_shown() -> Dictionary:
+	return _shown_grade.duplicate()
 
 
 ## Look of an object: { "color", "emission" (Color or null), "detail" }.
@@ -124,9 +220,11 @@ static func grid_slot_position(slot: Vector2i, grid_size: Vector2i) -> Vector3:
 
 
 ## Full rebuild of this room for `hour` from `state`. Objects on
-## `hidden_slots` are not drawn (the ripple shot holds back an arriving ash
-## object until its ember lands); the state itself is untouched.
-func refresh(state: GameStateScript, hour: int, hidden_slots: Array = []) -> void:
+## `hidden_slots` and shadows in `hidden_shadows` are not drawn (held back
+## for the ripple shot / a rise animation); the state itself is untouched.
+## `animate_grade`: tween to a changed passed-hour grade instead of snapping.
+func refresh(state: GameStateScript, hour: int, hidden_slots: Array = [],
+		animate_grade: bool = false, hidden_shadows: Array = []) -> void:
 	grid_w = state.grid_w
 	grid_h = state.grid_h
 	if _content != null:
@@ -136,10 +234,19 @@ func refresh(state: GameStateScript, hour: int, hidden_slots: Array = []) -> voi
 	_content.name = "Content"
 	add_child(_content)
 	_object_nodes = {}
+	_shadow_nodes = {}
+	_shadow_slots = {}
+
+	var target := grade_for(room_mood(state, hour))
+	var animate := animate_grade and not _shown_grade.is_empty() and target != _target_grade and is_inside_tree()
+	if not animate and _grade_tween != null:
+		_grade_tween.kill()
+		_grade_tween = null
+	_soot_count_before = int(_shown_grade.get("soot", 0)) if animate else int(target["soot"])
 
 	if state.player_hour == hour:
 		var rim := Vector3(grid_w + 0.5, 0.05, grid_h + 0.5)
-		_mesh_box(rim, Vector3(0, -0.13, 0), _material(COLORS["active_room"], COLORS["active_room"], 0.4))
+		_mesh_box(rim, Vector3(0, -0.13, 0), _material(COLORS["active_room"], COLORS["active_room"], 0.4, false))
 	for y in grid_h:
 		for x in grid_w:
 			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
@@ -147,10 +254,72 @@ func refresh(state: GameStateScript, hour: int, hidden_slots: Array = []) -> voi
 		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE and not hidden_slots.has(obj["slot"]):
 			_draw_object(obj)
 	for sh in state.shadows.values():
-		if sh["hour"] == hour:
-			_draw_shadow(sh["slot"], Sun.is_hour_passed(state, hour))
+		if sh["hour"] == hour and not hidden_shadows.has(sh["id"]):
+			_draw_shadow(sh, Sun.is_hour_passed(state, hour))
 	if state.player_hour == hour:
 		_draw_player(state, hour)
+	_draw_soot(state, hour, int(target["soot"]))
+
+	if animate:
+		_start_grade_tween(target)
+	else:
+		_target_grade = target
+		_shown_grade = target.duplicate()
+		_apply_grade(_shown_grade)
+		if _soot_fresh_material != null:
+			_soot_fresh_material.albedo_color.a = GRADE["soot_color"].a
+
+
+func _start_grade_tween(target: Dictionary) -> void:
+	if _grade_tween != null:
+		_grade_tween.kill()
+	var from := _shown_grade.duplicate()
+	_target_grade = target
+	_apply_grade(from)
+	if _soot_fresh_material != null:
+		_soot_fresh_material.albedo_color.a = 0.0
+	_grade_tween = create_tween()
+	_grade_tween.tween_method(func(t: float): _blend_grade(from, target, t), 0.0, 1.0, GRADE["transition_time"])
+
+
+func _blend_grade(from: Dictionary, to: Dictionary, t: float) -> void:
+	_shown_grade = {
+		"brightness": lerpf(from["brightness"], to["brightness"], t),
+		"emission": lerpf(from["emission"], to["emission"], t),
+		"soot": to["soot"],
+	}
+	_apply_grade(_shown_grade)
+	if _soot_fresh_material != null:
+		_soot_fresh_material.albedo_color.a = GRADE["soot_color"].a * t
+
+
+## Applies brightness / emission to every graded material of this room.
+func _apply_grade(grade: Dictionary) -> void:
+	for mat in _material_base:
+		if _material_base[mat]["graded"]:
+			_apply_grade_to(mat, grade)
+
+
+## Soot specks on floor tiles; ones beyond the previous count fade in.
+func _draw_soot(state: GameStateScript, hour: int, count: int) -> void:
+	if count <= 0:
+		return
+	var soot_mat := _material(GRADE["soot_color"], null, 0.0, false)
+	if _soot_fresh_material == null:
+		_soot_fresh_material = StandardMaterial3D.new()
+		_soot_fresh_material.albedo_color = GRADE["soot_color"]
+		_soot_fresh_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_soot_fresh_material.roughness = 1.0
+	var spots := soot_spots(hour, count, Vector2i(grid_w, grid_h))
+	for i in spots.size():
+		var spot: Dictionary = spots[i]
+		if state.terrain_at(hour, spot["slot"]) != GameStateScript.FLOOR:
+			continue
+		var quad := PlaneMesh.new()
+		quad.size = Vector2(spot["size"], spot["size"] * 0.7)
+		var at := slot_to_position(spot["slot"]) + Vector3(spot["offset"].x, 0.004, spot["offset"].y)
+		var node := _mesh(quad, at, soot_mat if i < _soot_count_before else _soot_fresh_material)
+		node.rotation_degrees.y = spot["angle"]
 
 
 func _draw_terrain(tile: String, slot: Vector2i) -> void:
@@ -302,18 +471,99 @@ func _draw_cracks(top: Vector3) -> void:
 		node.rotation_degrees.y = crack.z
 
 
-func _draw_shadow(slot: Vector2i, active: bool) -> void:
-	var pos := slot_to_position(slot)
+## A shadow under its own pivot at floor level (so it can rise from the floor).
+func _draw_shadow(sh: Dictionary, active: bool) -> void:
+	var pivot := Node3D.new()
+	pivot.position = slot_to_position(sh["slot"])
+	_content.add_child(pivot)
+	_shadow_nodes[sh["id"]] = pivot
+	_shadow_slots[sh["id"]] = sh["slot"]
+	var body_color: Color = COLORS["shadow_body"] if active else COLORS["shadow_body_dormant"]
+	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
+	_build_shadow_meshes(pivot, active,
+		_material(body_color, null, 0.0, false),
+		_material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy, false))
+
+
+func _build_shadow_meshes(pivot: Node3D, active: bool, body_mat: Material, tip_mat: Material) -> void:
 	var body := CapsuleMesh.new()
 	body.radius = 0.22
 	body.height = 0.85
-	var body_color: Color = COLORS["shadow_body"] if active else COLORS["shadow_body_dormant"]
-	_mesh(body, pos + Vector3(0, 0.43, 0), _material(body_color, null, 0.0))
+	var body_node := MeshInstance3D.new()
+	body_node.mesh = body
+	body_node.material_override = body_mat
+	body_node.position = Vector3(0, 0.43, 0)
+	pivot.add_child(body_node)
 	var tip := SphereMesh.new()
 	tip.radius = 0.1 if active else 0.07
 	tip.height = tip.radius * 2.0
-	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
-	_mesh(tip, pos + Vector3(0, 0.9, 0), _material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy))
+	var tip_node := MeshInstance3D.new()
+	tip_node.mesh = tip
+	tip_node.material_override = tip_mat
+	tip_node.position = Vector3(0, 0.9, 0)
+	pivot.add_child(tip_node)
+
+
+## The slot a shadow was drawn on in the last redraw, or (-1, -1).
+func last_shadow_slot(id: String) -> Vector2i:
+	return _shadow_slots.get(id, Vector2i(-1, -1))
+
+
+func shadow_node(id: String) -> Node3D:
+	return _shadow_nodes.get(id)
+
+
+## The shadow grows up out of the floor (its ember tip comes with it).
+func rise_shadow(id: String) -> void:
+	var pivot := shadow_node(id)
+	if pivot == null or not pivot.is_inside_tree():
+		return
+	pivot.scale = SHADOW_RISE_START
+	pivot.create_tween().tween_property(pivot, "scale", Vector3.ONE, SHADOW_RISE_TIME) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## A stand-in for a destroyed shadow, kept until it dissipates (it survives
+## redraws). Returns the node, or null if the slot is unknown.
+func add_shadow_ghost(slot: Vector2i) -> Node3D:
+	if slot.x < 0:
+		return null
+	if _fx_root == null:
+		_fx_root = Node3D.new()
+		_fx_root.name = "Fx"
+		add_child(_fx_root)
+	var ghost := Node3D.new()
+	ghost.name = "ShadowGhost"
+	ghost.position = slot_to_position(slot)
+	_fx_root.add_child(ghost)
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = COLORS["shadow_body"]
+	body_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var tip_mat := StandardMaterial3D.new()
+	tip_mat.albedo_color = COLORS["shadow_tip"]
+	tip_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	tip_mat.emission_enabled = true
+	tip_mat.emission = COLORS["shadow_tip"]
+	tip_mat.emission_energy_multiplier = SHADOW_TIP_ACTIVE_ENERGY
+	_build_shadow_meshes(ghost, true, body_mat, tip_mat)
+	return ghost
+
+
+## Shrinks and fades a ghost, then frees it.
+static func dissipate_ghost(ghost: Node3D) -> void:
+	if ghost == null or not is_instance_valid(ghost):
+		return
+	if not ghost.is_inside_tree():
+		ghost.free()
+		return
+	var tween := ghost.create_tween().set_parallel(true)
+	tween.tween_property(ghost, "scale", SHADOW_DISSIPATE_END, SHADOW_DISSIPATE_TIME).set_ease(Tween.EASE_IN)
+	for child in ghost.get_children():
+		var mat: StandardMaterial3D = child.material_override
+		tween.tween_property(mat, "albedo_color:a", 0.0, SHADOW_DISSIPATE_TIME)
+		if mat.emission_enabled:
+			tween.tween_property(mat, "emission_energy_multiplier", 0.0, SHADOW_DISSIPATE_TIME)
+	tween.chain().tween_callback(ghost.queue_free)
 
 
 func _draw_player(state: GameStateScript, hour: int) -> void:
@@ -330,11 +580,11 @@ func _draw_player(state: GameStateScript, hour: int) -> void:
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.25
 	capsule.height = 0.9
-	_mesh(capsule, slot_to_position(slot) + Vector3(0, floor_y + 0.45, 0), _material(COLORS["player"], null, 0.0))
+	_mesh(capsule, slot_to_position(slot) + Vector3(0, floor_y + 0.45, 0), _material(COLORS["player"], null, 0.0, false))
 	var ring := TorusMesh.new()
 	ring.inner_radius = ring_radii.x
 	ring.outer_radius = ring_radii.y
-	_mesh(ring, slot_to_position(slot) + Vector3(0, floor_y + 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8))
+	_mesh(ring, slot_to_position(slot) + Vector3(0, floor_y + 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8, false))
 
 
 func _box(size: Vector3, pos: Vector3, color_key: String) -> void:
@@ -357,8 +607,10 @@ func _mesh(mesh: Mesh, pos: Vector3, material: Material) -> MeshInstance3D:
 
 
 ## One shared material per (color, emission, energy), so refreshes stay cheap.
-func _material(color: Color, emission: Variant, energy: float) -> StandardMaterial3D:
-	var key := "%s|%s|%s" % [color, emission, energy]
+## One shared material per (color, emission, energy, graded). Graded ones
+## follow this room's passed-hour grade (see _apply_grade).
+func _material(color: Color, emission: Variant, energy: float, graded: bool = true) -> StandardMaterial3D:
+	var key := "%s|%s|%s|%s" % [color, emission, energy, graded]
 	if not _materials.has(key):
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = color
@@ -370,4 +622,16 @@ func _material(color: Color, emission: Variant, energy: float) -> StandardMateri
 			mat.emission = emission
 			mat.emission_energy_multiplier = energy
 		_materials[key] = mat
+		_material_base[mat] = {"color": color, "energy": energy, "graded": graded}
+		if graded and not _shown_grade.is_empty():
+			_apply_grade_to(mat, _shown_grade)
 	return _materials[key]
+
+
+func _apply_grade_to(mat: StandardMaterial3D, grade: Dictionary) -> void:
+	var base: Dictionary = _material_base[mat]
+	var c: Color = base["color"]
+	var b: float = grade["brightness"]
+	mat.albedo_color = Color(minf(c.r * b, 1.0), minf(c.g * b, 1.0), minf(c.b * b, 1.0), c.a)
+	if mat.emission_enabled:
+		mat.emission_energy_multiplier = base["energy"] * grade["emission"]
