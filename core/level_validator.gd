@@ -12,13 +12,12 @@ extends RefCounted
 ## an empty array means the level is valid.
 
 const GameStateScript := preload("res://core/game_state.gd")
+const Walkability := preload("res://core/walkability.gd")
 
 ## Object types in the section 3.2 type table (keys and torches are cut).
 const KNOWN_TYPES := ["bridge", "ash_path", "crate", "door", "stair", "exit"]
-## The only types that may sit on a chasm tile.
-const CHASM_TYPES := ["bridge", "ash_path"]
-## Types that block the tile while INTACT.
-const BLOCKING_TYPES := ["crate", "door"]
+## The only types that may sit on a chasm tile (a burned bridge included).
+const CHASM_TYPES := Walkability.CHASM_FILLERS
 const STATES := [GameStateScript.INTACT, GameStateScript.ASH, GameStateScript.GONE]
 
 
@@ -131,19 +130,10 @@ static func _check_player_start(state: GameStateScript, errors: Array[String]) -
 	var obj := state.object_at(state.player_hour, state.player_slot)
 	if tile == GameStateScript.WALL:
 		errors.append("player start: %s is a wall" % where)
-	elif tile == GameStateScript.CHASM and not _fills_chasm(obj):
+	elif tile == GameStateScript.CHASM and not Walkability.fills_chasm(obj):
 		errors.append("player start: %s is a chasm with no bridge or ash_path on it" % where)
-	if BLOCKING_TYPES.has(obj.get("type")) and obj["state"] == GameStateScript.INTACT:
+	if Walkability.blocks(obj):
 		errors.append("player start: %s holds INTACT %s \"%s\", which blocks" % [where, obj["type"], obj["id"]])
-
-
-## An INTACT bridge or an ash_path makes a chasm walkable (type table, 3.2).
-static func _fills_chasm(obj: Dictionary) -> bool:
-	if obj.is_empty():
-		return false
-	if obj["type"] == "bridge":
-		return obj["state"] == GameStateScript.INTACT
-	return obj["type"] == "ash_path"
 
 
 ## Reports an unknown hour or an out-of-grid slot. Returns true if both are fine.
