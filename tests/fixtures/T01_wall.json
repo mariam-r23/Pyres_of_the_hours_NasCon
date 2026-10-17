@@ -1,0 +1,14 @@
+{
+  "id": "T01_wall",
+  "title": "Test: wall next to the start",
+  "grid": { "w": 5, "h": 5 },
+  "sun": { "start_index": 0, "actions_per_hour": 3 },
+  "rooms": [
+    { "hour": 12, "terrain": [".#...", ".....", ".....", ".....", "....."] }
+  ],
+  "player": { "hour": 12, "slot": [0, 0] },
+  "objects": [
+    { "id": "exit_1", "type": "exit", "hour": 12, "slot": [4, 4], "state": "INTACT", "flammable": false }
+  ],
+  "shadows": []
+}
