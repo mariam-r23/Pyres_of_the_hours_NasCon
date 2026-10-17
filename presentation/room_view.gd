@@ -26,6 +26,9 @@ const COLORS := {
 	"stair": Color(0.55, 0.60, 0.66),        # pale cold steel
 	"exit": Color(0.70, 0.82, 0.90),         # pale cold light
 	"exit_glow": Color(0.35, 0.50, 0.60),
+	"exit_halo": Color(0.85, 0.93, 1.00, 0.35), # pale halo around the exit
+	"stair_marker": Color(0.55, 0.85, 0.95, 0.55), # cold-light column over a stair
+	"burnable_edge": Color(1.00, 0.93, 0.82, 0.55), # faint warm-white edge: "this burns"
 	"ash": Color(0.16, 0.16, 0.17),          # burned remains (charcoal)
 	"ember": Color(0.42, 0.14, 0.07),        # dim ember glow on gameplay ash
 	"shadow_body": Color(0.03, 0.03, 0.04),
@@ -43,6 +46,12 @@ const COLORS := {
 const EMBER_ENERGY := 0.8
 const SHADOW_TIP_DORMANT_ENERGY := 0.2
 const SHADOW_TIP_ACTIVE_ENERGY := 2.5
+const EXIT_GLOW_ENERGY := 1.6
+const MARKER_ENERGY := 1.0
+const BURNABLE_EDGE_ENERGY := 0.6
+## How far the burnable edge sticks out past the object on each side.
+const BURNABLE_EDGE_MARGIN := 0.12
+const STAIR_COLUMN_HEIGHT := 1.4
 ## Walls are kept low so they do not hide what stands behind them.
 const WALL_HEIGHT := 0.6
 
@@ -106,7 +115,7 @@ func refresh(state: GameStateScript, hour: int) -> void:
 		if sh["hour"] == hour:
 			_draw_shadow(sh["slot"], Sun.is_hour_passed(state, hour))
 	if state.player_hour == hour:
-		_draw_player(state.player_slot)
+		_draw_player(state, hour)
 
 
 func _draw_terrain(tile: String, slot: Vector2i) -> void:
@@ -147,8 +156,33 @@ func _draw_object(obj: Dictionary) -> void:
 		_:
 			size = Vector3(0.5, 0.5, 0.5)
 			lift = 0.25
-	var energy := EMBER_ENERGY if style["emission"] != null else 0.0
+	var energy := 0.0
+	if style["emission"] != null:
+		energy = EXIT_GLOW_ENERGY if obj["type"] == "exit" else EMBER_ENERGY
 	_mesh_box(size, pos + Vector3(0, lift, 0), _material(style["color"], style["emission"], energy))
+
+	var base_y := lift - size.y / 2.0
+	# Burnable (flammable and INTACT): a faint warm-white edge around the base.
+	if obj["flammable"] and obj["state"] == GameStateScript.INTACT:
+		var edge := Vector3(size.x + 2.0 * BURNABLE_EDGE_MARGIN, 0.02, size.z + 2.0 * BURNABLE_EDGE_MARGIN)
+		_mesh_box(edge, pos + Vector3(0, base_y + 0.005, 0),
+			_material(COLORS["burnable_edge"], COLORS["burnable_edge"], BURNABLE_EDGE_ENERGY))
+	match obj["type"]:
+		"stair":
+			# A thin column of cold light, so a stair reads from any distance.
+			var column := CylinderMesh.new()
+			column.top_radius = 0.07
+			column.bottom_radius = 0.07
+			column.height = STAIR_COLUMN_HEIGHT
+			_mesh(column, pos + Vector3(0, base_y + size.y + STAIR_COLUMN_HEIGHT / 2.0, 0),
+				_material(COLORS["stair_marker"], COLORS["stair_marker"], MARKER_ENERGY))
+		"exit":
+			var halo := CylinderMesh.new()
+			halo.top_radius = 0.62
+			halo.bottom_radius = 0.62
+			halo.height = 0.02
+			_mesh(halo, pos + Vector3(0, base_y + 0.004, 0),
+				_material(COLORS["exit_halo"], COLORS["exit_halo"], MARKER_ENERGY))
 
 
 func _draw_shadow(slot: Vector2i, active: bool) -> void:
@@ -165,15 +199,18 @@ func _draw_shadow(slot: Vector2i, active: bool) -> void:
 	_mesh(tip, pos + Vector3(0, 0.9, 0), _material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy))
 
 
-func _draw_player(slot: Vector2i) -> void:
+func _draw_player(state: GameStateScript, hour: int) -> void:
+	var slot := state.player_slot
+	# Stand on top of a stair box instead of inside it (stair height 0.3).
+	var floor_y := 0.3 if state.object_at(hour, slot).get("type") == "stair" else 0.0
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.25
 	capsule.height = 0.9
-	_mesh(capsule, slot_to_position(slot) + Vector3(0, 0.45, 0), _material(COLORS["player"], null, 0.0))
+	_mesh(capsule, slot_to_position(slot) + Vector3(0, floor_y + 0.45, 0), _material(COLORS["player"], null, 0.0))
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.3
 	ring.outer_radius = 0.4
-	_mesh(ring, slot_to_position(slot) + Vector3(0, 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8))
+	_mesh(ring, slot_to_position(slot) + Vector3(0, floor_y + 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8))
 
 
 func _box(size: Vector3, pos: Vector3, color_key: String) -> void:

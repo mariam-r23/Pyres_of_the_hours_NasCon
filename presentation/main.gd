@@ -11,16 +11,35 @@ const RoomViewScript := preload("res://presentation/room_view.gd")
 const LevelList := preload("res://presentation/level_list.gd")
 const Sun := preload("res://core/sun.gd")
 
-const WON_NEXT_TEXT := "You reached the exit.
-Press N for the next level, R to restart."
-const WON_LAST_TEXT := "That was the last level for now.
-Press R to restart."
-const FAILED_TEXT := "The dial completed.
-Press R to restart or Z to undo."
+const WON_NEXT_TEXT := "You reached the exit.\nPress N for the next level, R to restart."
+const WON_LAST_TEXT := "That was the last level for now.\nPress R to restart."
+const FAILED_TEXT := "The dial completed.\nPress R to restart or Z to undo."
 const NO_LEVELS_TEXT := "No levels found in levels/data/."
-const CONTROLS_TEXT := "Arrows / WASD: move    B then a direction: burn    E: interact    Space: wait
-Z: undo    R: restart    N: next level (after a win)    [ ]: previous / next level"
-const BURN_MODE_TEXT := "BURN: press a direction (B or Esc cancels)"
+const CONTROLS_TEXT := "Arrows / WASD: move    B then a direction: burn    E: interact    Space: wait\nZ: undo    R: restart    N: next level (after a win)    [ ]: previous / next level"
+const BURN_HINT := "Burn: choose a direction (Escape cancels)"
+const STAIR_HINT := "Press E to use the stair."
+
+## Friendly line for every rejection reason (clarification 11, plus undo's
+## nothing_to_undo). An unmapped reason is shown as its raw string.
+const REJECTION_MESSAGES := {
+	"out_of_bounds": "That is the edge of the room.",
+	"blocked_terrain": "A wall or a gap blocks the way.",
+	"blocked_object": "Something is in the way.",
+	"shadow_blocks": "A shadow blocks the way. Fire can destroy it.",
+	"not_on_stair": "Stand on a stair to use it.",
+	"arrival_blocked": "The way out of the stair is blocked.",
+	"nothing_to_burn": "Nothing to burn there.",
+	"not_flammable": "That will not burn.",
+	"not_intact": "That is already burned.",
+	"ash_target_occupied": "The ash has nowhere to land.",
+	"shadow_wakes_on_you": "A shadow would wake on you. Do something else.",
+	"level_over": "The level is over. Z undoes, R restarts.",
+	"unknown_action": "That does nothing.",
+	"nothing_to_undo": "Nothing to undo.",
+}
+## Seconds the rejection line stays fully visible, then fades.
+const FEEDBACK_HOLD := 1.0
+const FEEDBACK_FADE := 0.5
 
 ## Cold, dark world (see room_view.gd COLORS for the color rule).
 const BACKGROUND := Color(0.035, 0.045, 0.065)
@@ -28,6 +47,7 @@ const AMBIENT := Color(0.45, 0.52, 0.62)
 const FOG := Color(0.10, 0.12, 0.16)
 const LIGHT := Color(0.80, 0.86, 0.95)
 const TEXT_COLOR := Color(0.65, 0.70, 0.78)
+const HINT_COLOR := Color(0.80, 0.88, 0.96)
 
 var controller: Node
 var clock: Node3D
@@ -38,6 +58,9 @@ var level_meta := {}
 var _message: Label
 var _hint: Label
 var _status: Label
+var _context: Label
+var _feedback: Label
+var _feedback_tween: Tween
 var _refresh_queued := false
 
 
@@ -62,6 +85,10 @@ func _ready() -> void:
 	for type in ["action_applied", "action_rejected", "undo_done", "shadow_appeared",
 			"shadow_destroyed", "level_won", "level_failed"]:
 		bus.connect(type, func(_event): _queue_refresh())
+	bus.action_rejected.connect(func(event): show_feedback(rejection_message(event.get("reason", ""))))
+	# A valid action makes an old rejection line stale; clear it at once.
+	bus.action_applied.connect(func(_event): hide_feedback())
+	bus.undo_done.connect(func(_event): hide_feedback())
 	bus.level_loaded.connect(_on_level_loaded)
 	bus.level_restarted.connect(_queue_refresh)
 	controller.burn_mode_changed.connect(_on_burn_mode_changed)
@@ -102,9 +129,7 @@ func load_entry(entry: Dictionary) -> Array:
 	var errors: Array = controller.load_level(entry["path"])
 	if not errors.is_empty():
 		level_id = previous_id
-		_show_message("Could not load %s:
-%s" % [entry["id"], "
-".join(PackedStringArray(errors))])
+		_show_message("Could not load %s:\n%s" % [entry["id"], "\n".join(PackedStringArray(errors))])
 	return errors
 
 
@@ -118,12 +143,28 @@ static func end_message(status: String, has_next_level: bool) -> String:
 	return ""
 
 
+## Friendly text for a rejection reason; the raw reason if it is not mapped.
+static func rejection_message(reason: String) -> String:
+	return REJECTION_MESSAGES.get(reason, reason)
+
+
+## The hint under the status label: burn mode first, then "stand on a stair",
+## else "". Reads the state only (what is on the player's tile).
+static func context_hint(state, burn_mode: bool) -> String:
+	if state == null or state.status != "playing":
+		return ""
+	if burn_mode:
+		return BURN_HINT
+	if state.object_at(state.player_hour, state.player_slot).get("type") == "stair":
+		return STAIR_HINT
+	return ""
+
+
 ## Top-left status: level, actions / par, sun, spirit mood.
 static func status_text(meta: Dictionary, id: String, state) -> String:
 	var title: String = meta.get("title", "")
 	var par: int = meta.get("par_actions", -1)
-	return "
-".join(PackedStringArray([
+	return "\n".join(PackedStringArray([
 		"%s (%s)" % [title, id] if title != "" else id,
 		"Actions: %d / par %s" % [state.action_count, str(par) if par >= 0 else "-"],
 		sun_text(state),
@@ -163,6 +204,31 @@ func _refresh() -> void:
 	clock.refresh_all(state)
 	_show_message(end_message(state.status, LevelList.next_of(level_id) != null))
 	_status.text = status_text(level_meta, level_id, state)
+	_update_context_hint()
+
+
+## Shows a short line near the bottom center, then fades it out.
+func show_feedback(text: String) -> void:
+	if _feedback_tween != null:
+		_feedback_tween.kill()
+	_feedback.text = text
+	_feedback.modulate.a = 1.0
+	_feedback.visible = true
+	_feedback_tween = create_tween()
+	_feedback_tween.tween_interval(FEEDBACK_HOLD)
+	_feedback_tween.tween_property(_feedback, "modulate:a", 0.0, FEEDBACK_FADE)
+	_feedback_tween.tween_callback(func(): _feedback.visible = false)
+
+
+func hide_feedback() -> void:
+	if _feedback_tween != null:
+		_feedback_tween.kill()
+	_feedback.visible = false
+
+
+func _update_context_hint() -> void:
+	_context.text = context_hint(controller.current_state(), controller.burn_mode)
+	_context.visible = _context.text != ""
 
 
 func _show_message(text: String) -> void:
@@ -170,9 +236,8 @@ func _show_message(text: String) -> void:
 	_message.visible = text != ""
 
 
-func _on_burn_mode_changed(active: bool) -> void:
-	_hint.text = (BURN_MODE_TEXT + "
-" if active else "") + CONTROLS_TEXT
+func _on_burn_mode_changed(_active: bool) -> void:
+	_update_context_hint()
 
 
 func _build_world() -> void:
@@ -243,3 +308,27 @@ func _build_ui() -> void:
 	_status.add_theme_font_size_override("font_size", 15)
 	_status.add_theme_color_override("font_color", TEXT_COLOR)
 	layer.add_child(_status)
+
+	# Just under the four status lines.
+	_context = Label.new()
+	_context.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	_context.offset_left = 16
+	_context.offset_top = 112
+	_context.add_theme_font_size_override("font_size", 17)
+	_context.add_theme_color_override("font_color", HINT_COLOR)
+	_context.visible = false
+	layer.add_child(_context)
+
+	# Bottom center, above the controls text.
+	_feedback = Label.new()
+	_feedback.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_feedback.offset_bottom = -64
+	_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_feedback.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_feedback.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_feedback.add_theme_font_size_override("font_size", 20)
+	_feedback.add_theme_color_override("font_color", HINT_COLOR)
+	_feedback.add_theme_constant_override("outline_size", 6)
+	_feedback.add_theme_color_override("font_outline_color", BACKGROUND)
+	_feedback.visible = false
+	layer.add_child(_feedback)
