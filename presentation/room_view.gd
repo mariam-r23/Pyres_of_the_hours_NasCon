@@ -1,0 +1,196 @@
+extends Node3D
+## Draws ONE room (one hour) from a GameState: terrain, objects, shadows and
+## the player, as placeholder boxes. Holds no game rules: walkability and
+## shadow activity come from core/.
+##
+## Positions: if this node has a child "Slots" with Marker3D children named
+## slot_<x>_<y> (Noor's room scenes, PROJECT_CONTEXT.md 6.5), those are used.
+## Otherwise 1 unit per cell, room centered on this node's origin, x to the
+## right and grid y toward +Z.
+
+const GameStateScript := preload("res://core/game_state.gd")
+const Sun := preload("res://core/sun.gd")
+
+## ALL colors live here so Noor can restyle in one place.
+## Color rule: the world is cold (slate blue, ash gray). "fire" is the ONLY
+## strongly saturated warm color. Embers and shadow tips are dim, deep
+## red-orange (low brightness), never a bright saturated orange.
+const COLORS := {
+	"floor": Color(0.19, 0.22, 0.27),        # slate
+	"wall": Color(0.36, 0.38, 0.42),         # ash gray stone
+	"chasm": Color(0.04, 0.05, 0.07),        # near-black pit
+	"bridge": Color(0.33, 0.36, 0.40),       # cold weathered planks
+	"ash_path": Color(0.30, 0.30, 0.31),     # gameplay ash, glows (see "ember")
+	"crate": Color(0.56, 0.59, 0.64),
+	"door": Color(0.26, 0.29, 0.34),         # dark steel gate
+	"stair": Color(0.55, 0.60, 0.66),        # pale cold steel
+	"exit": Color(0.70, 0.82, 0.90),         # pale cold light
+	"exit_glow": Color(0.35, 0.50, 0.60),
+	"ash": Color(0.16, 0.16, 0.17),          # burned remains (charcoal)
+	"ember": Color(0.42, 0.14, 0.07),        # dim ember glow on gameplay ash
+	"shadow_body": Color(0.03, 0.03, 0.04),
+	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange, dimmer than fire
+	"player": Color(0.10, 0.11, 0.13),
+	"sun_marker": Color(0.80, 0.86, 0.92),   # cold pale dial hand
+	"dial": Color(0.20, 0.22, 0.26),         # dark steel
+	"fire": Color(1.00, 0.45, 0.05),         # THE warm accent. Only fire.
+}
+
+## Emission strength for gameplay ash and shadow tips.
+const EMBER_ENERGY := 0.8
+const SHADOW_TIP_DORMANT_ENERGY := 0.25
+const SHADOW_TIP_ACTIVE_ENERGY := 2.0
+
+const CELL := 1.0
+
+var grid_w := GameStateScript.DEFAULT_GRID_SIZE
+var grid_h := GameStateScript.DEFAULT_GRID_SIZE
+
+var _content: Node3D = null
+var _materials := {}
+
+
+## Look of an object: { "color": Color, "emission": Color or null }.
+## Burned (ASH) objects are charcoal with an ember glow; an ash_path is
+## gameplay ash, so it glows too. Unknown types fall back to the crate color.
+static func object_style(type: String, state: String) -> Dictionary:
+	if state == GameStateScript.ASH:
+		return {"color": COLORS["ash"], "emission": COLORS["ember"]}
+	match type:
+		"ash_path":
+			return {"color": COLORS["ash_path"], "emission": COLORS["ember"]}
+		"exit":
+			return {"color": COLORS["exit"], "emission": COLORS["exit_glow"]}
+	return {"color": COLORS.get(type, COLORS["crate"]), "emission": null}
+
+
+## Center of a grid slot in this room's local space.
+func slot_to_position(slot: Vector2i) -> Vector3:
+	var slots := get_node_or_null("Slots")
+	if slots != null:
+		var marker := slots.get_node_or_null("slot_%d_%d" % [slot.x, slot.y]) as Node3D
+		if marker != null:
+			return (slots as Node3D).transform * marker.position
+	return Vector3(
+		(slot.x - (grid_w - 1) / 2.0) * CELL,
+		0.0,
+		(slot.y - (grid_h - 1) / 2.0) * CELL)
+
+
+## Full rebuild of this room for `hour` from `state`.
+func refresh(state: GameStateScript, hour: int) -> void:
+	grid_w = state.grid_w
+	grid_h = state.grid_h
+	if _content != null:
+		remove_child(_content)
+		_content.queue_free()
+	_content = Node3D.new()
+	_content.name = "Content"
+	add_child(_content)
+
+	for y in grid_h:
+		for x in grid_w:
+			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
+	for obj in state.objects.values():
+		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE:
+			_draw_object(obj)
+	for sh in state.shadows.values():
+		if sh["hour"] == hour:
+			_draw_shadow(sh["slot"], Sun.is_hour_passed(state, hour))
+	if state.player_hour == hour:
+		_draw_player(state.player_slot)
+
+
+func _draw_terrain(tile: String, slot: Vector2i) -> void:
+	var pos := slot_to_position(slot)
+	if tile == GameStateScript.WALL:
+		_box(Vector3(0.98, 1.0, 0.98), pos + Vector3(0, 0.5, 0), "wall")
+	elif tile == GameStateScript.CHASM:
+		_box(Vector3(0.96, 0.1, 0.96), pos + Vector3(0, -0.6, 0), "chasm")
+	else:
+		_box(Vector3(0.96, 0.1, 0.96), pos + Vector3(0, -0.05, 0), "floor")
+
+
+func _draw_object(obj: Dictionary) -> void:
+	var pos := slot_to_position(obj["slot"])
+	var style := object_style(obj["type"], obj["state"])
+	var burned: bool = obj["state"] == GameStateScript.ASH
+	var size: Vector3
+	var lift: float
+	match obj["type"]:
+		"bridge":
+			size = Vector3(0.96, 0.08, 0.7)
+			lift = 0.04 if not burned else -0.45   # burned planks fall into the gap
+		"ash_path":
+			size = Vector3(0.9, 0.06, 0.9)
+			lift = 0.03
+		"crate":
+			size = Vector3(0.7, 0.7, 0.7) if not burned else Vector3(0.75, 0.15, 0.75)
+			lift = size.y / 2.0
+		"door":
+			size = Vector3(0.9, 1.0, 0.18) if not burned else Vector3(0.9, 0.1, 0.18)
+			lift = size.y / 2.0
+		"stair":
+			size = Vector3(0.8, 0.3, 0.8)
+			lift = 0.15
+		"exit":
+			size = Vector3(0.8, 0.05, 0.8)
+			lift = 0.03
+		_:
+			size = Vector3(0.5, 0.5, 0.5)
+			lift = 0.25
+	var energy := EMBER_ENERGY if style["emission"] != null else 0.0
+	_mesh_box(size, pos + Vector3(0, lift, 0), _material(style["color"], style["emission"], energy))
+
+
+func _draw_shadow(slot: Vector2i, active: bool) -> void:
+	var pos := slot_to_position(slot)
+	var body := CapsuleMesh.new()
+	body.radius = 0.22
+	body.height = 0.85
+	_mesh(body, pos + Vector3(0, 0.43, 0), _material(COLORS["shadow_body"], null, 0.0))
+	var tip := SphereMesh.new()
+	tip.radius = 0.08
+	tip.height = 0.16
+	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
+	_mesh(tip, pos + Vector3(0, 0.9, 0), _material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy))
+
+
+func _draw_player(slot: Vector2i) -> void:
+	var capsule := CapsuleMesh.new()
+	capsule.radius = 0.25
+	capsule.height = 0.9
+	_mesh(capsule, slot_to_position(slot) + Vector3(0, 0.45, 0), _material(COLORS["player"], null, 0.0))
+
+
+func _box(size: Vector3, pos: Vector3, color_key: String) -> void:
+	_mesh_box(size, pos, _material(COLORS[color_key], null, 0.0))
+
+
+func _mesh_box(size: Vector3, pos: Vector3, material: Material) -> void:
+	var box := BoxMesh.new()
+	box.size = size
+	_mesh(box, pos, material)
+
+
+func _mesh(mesh: Mesh, pos: Vector3, material: Material) -> void:
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = material
+	node.position = pos
+	_content.add_child(node)
+
+
+## One shared material per (color, emission, energy), so refreshes stay cheap.
+func _material(color: Color, emission: Variant, energy: float) -> StandardMaterial3D:
+	var key := "%s|%s|%s" % [color, emission, energy]
+	if not _materials.has(key):
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.roughness = 0.9
+		if emission != null:
+			mat.emission_enabled = true
+			mat.emission = emission
+			mat.emission_energy_multiplier = energy
+		_materials[key] = mat
+	return _materials[key]
