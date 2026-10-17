@@ -71,7 +71,7 @@ const HUD_LAYOUT := {
 	"status": {"font": 15, "offset_left": 16, "offset_top": 12},
 	"context": {"font": 17, "offset_left": 16, "offset_top": 112},
 	"feedback": {"font": 20, "offset_bottom": -64, "outline": 6},
-	"return_button": {"font": 22, "offset_top": -150, "offset_bottom": -110},
+	"return_button": {"font": 22, "offset_top": 78, "offset_bottom": 118},
 }
 
 ## Spirit speech placeholder (ui/ can replace it by listening to spirit_said):
@@ -722,7 +722,8 @@ func _build_ui() -> void:
 
 	# After the ending: a clickable way back too (Enter also works).
 	_return_button = MenuStyle.button("Return to main menu", 1.0)
-	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	# Just under the centered ending message, clear of the 6 o'clock room.
+	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_return_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_return_button.visible = false
 	_return_button.pressed.connect(show_main_menu)
