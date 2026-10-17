@@ -376,3 +376,5 @@ Do not repeat: {last_3_lines}
     - `burn`: `nothing_to_burn`, `not_flammable`, `not_intact`, `ash_target_occupied`
     - any action: `shadow_wakes_on_you`
     - after win or fail: `level_over`
+    - malformed action (unknown type or direction): `unknown_action`
+12. `apply_action(state, action)` never modifies the state passed in. On success it returns a NEW deep copy with the action applied, the action counter +1, and `action_applied` as the LAST event. On rejection it returns `ok = false`, the original state unchanged, a `reason`, and `events` containing only `{"type": "action_rejected", "reason": ...}`.
