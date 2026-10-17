@@ -1,0 +1,36 @@
+{
+ "id": "FX_exit",
+ "title": "FX_exit",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [],
+ "player": {
+  "hour": 12,
+  "slot": [
+   0,
+   1
+  ]
+ },
+ "objects": [
+  {
+   "id": "ex",
+   "type": "exit",
+   "hour": 12,
+   "slot": [
+    1,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}

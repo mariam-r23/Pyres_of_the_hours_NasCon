@@ -1,0 +1,8 @@
+{
+  "recent_window": 3,
+  "allowed_moods": {
+    "1": ["amused", "annoyed", "triumphant"],
+    "2": ["amused", "annoyed", "menacing"],
+    "3": ["menacing", "triumphant"]
+  }
+}

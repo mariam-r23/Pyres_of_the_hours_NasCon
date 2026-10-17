@@ -1,0 +1,36 @@
+{
+ "id": "FX_edge",
+ "title": "FX_edge",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [],
+ "player": {
+  "hour": 12,
+  "slot": [
+   0,
+   0
+  ]
+ },
+ "objects": [
+  {
+   "id": "exit_far",
+   "type": "exit",
+   "hour": 10,
+   "slot": [
+    4,
+    2
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}

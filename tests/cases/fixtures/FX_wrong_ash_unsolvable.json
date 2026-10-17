@@ -1,0 +1,82 @@
+{
+ "id": "FX_wrong_ash_unsolvable",
+ "title": "FX_wrong_ash_unsolvable",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [
+  {
+   "hour": 6,
+   "terrain": [
+    "..#..",
+    "..~..",
+    "..#.."
+   ]
+  }
+ ],
+ "player": {
+  "hour": 12,
+  "slot": [
+   0,
+   1
+  ]
+ },
+ "objects": [
+  {
+   "id": "cr",
+   "type": "crate",
+   "hour": 12,
+   "slot": [
+    2,
+    0
+   ],
+   "state": "INTACT",
+   "flammable": true,
+   "ash_link": {
+    "hour": 6,
+    "slot": [
+     1,
+     1
+    ],
+    "becomes": "ash_path"
+   }
+  },
+  {
+   "id": "s",
+   "type": "stair",
+   "hour": 12,
+   "slot": [
+    4,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false,
+   "links_to": {
+    "hour": 6,
+    "slot": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "id": "ex",
+   "type": "exit",
+   "hour": 6,
+   "slot": [
+    4,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}

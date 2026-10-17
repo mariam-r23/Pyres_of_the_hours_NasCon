@@ -1,0 +1,116 @@
+[
+ {
+  "name": "burning an empty slot is rejected",
+  "level": "FX_burn_basic",
+  "actions": [
+   "burn:up"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "nothing_to_burn",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "burning twice is rejected (not INTACT)",
+  "level": "FX_burn_basic",
+  "actions": [
+   "burn:right",
+   "burn:right"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "not_intact",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "burning off the grid is rejected",
+  "level": "FX_burn_basic",
+  "actions": [
+   "burn:left"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "out_of_bounds",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "an object without an ash link still burns",
+  "level": "FX_burn_basic",
+  "actions": [
+   "burn:right"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "a non-flammable object cannot be burned",
+  "level": "FX_burn_stair",
+  "actions": [
+   "burn:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "not_flammable",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "ash target holding the player makes the burn invalid",
+  "level": "FX_ash_here",
+  "actions": [
+   "burn:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "ash_target_occupied",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "ash target holding an ACTIVE shadow makes the burn invalid",
+  "level": "FX_ash_shadow",
+  "actions": [
+   "wait",
+   "wait",
+   "burn:right"
+  ],
+  "expect": {
+   "rejected_at": 2,
+   "reason": "ash_target_occupied",
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "ash target holding a DORMANT shadow is allowed",
+  "level": "FX_ash_shadow",
+  "actions": [
+   "burn:right"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "an ash link may create a flammable object that burns again",
+  "level": "FX_chain",
+  "actions": [
+   "burn:right",
+   "move:up",
+   "interact",
+   "burn:right"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 4
+  }
+ }
+]

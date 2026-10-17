@@ -1,0 +1,142 @@
+{
+  "id": "L02_wake_the_shadow",
+  "title": "Wake the Shadow",
+  "act": 1,
+  "spirit_mood": "amused",
+  "mood_weights": {
+    "amused": 0.5,
+    "annoyed": 0.3,
+    "triumphant": 0.2
+  },
+  "grid": {
+    "w": 5,
+    "h": 3
+  },
+  "sun": {
+    "start_index": 0,
+    "actions_per_hour": 3
+  },
+  "rooms": [
+    {
+      "hour": 12,
+      "terrain": [
+        ".....",
+        ".....",
+        "....."
+      ]
+    },
+    {
+      "hour": 2,
+      "terrain": [
+        "..#..",
+        ".....",
+        "..#.."
+      ]
+    },
+    {
+      "hour": 4,
+      "terrain": [
+        "..#..",
+        "..~~.",
+        "..#.."
+      ]
+    }
+  ],
+  "player": {
+    "hour": 12,
+    "slot": [
+      0,
+      1
+    ]
+  },
+  "objects": [
+    {
+      "id": "plank_a",
+      "type": "crate",
+      "hour": 12,
+      "slot": [
+        2,
+        0
+      ],
+      "flammable": true,
+      "ash_link": {
+        "hour": 4,
+        "slot": [
+          2,
+          1
+        ],
+        "becomes": "ash_path"
+      }
+    },
+    {
+      "id": "gate_a",
+      "type": "door",
+      "hour": 2,
+      "slot": [
+        2,
+        1
+      ],
+      "flammable": true,
+      "ash_link": {
+        "hour": 4,
+        "slot": [
+          3,
+          1
+        ],
+        "becomes": "ash_path"
+      }
+    },
+    {
+      "id": "stair_12",
+      "type": "stair",
+      "hour": 12,
+      "slot": [
+        2,
+        1
+      ],
+      "links_to": {
+        "hour": 2,
+        "slot": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "stair_2",
+      "type": "stair",
+      "hour": 2,
+      "slot": [
+        4,
+        1
+      ],
+      "links_to": {
+        "hour": 4,
+        "slot": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "exit_1",
+      "type": "exit",
+      "hour": 4,
+      "slot": [
+        4,
+        1
+      ]
+    }
+  ],
+  "shadows": [
+    {
+      "id": "sh_1",
+      "hour": 2,
+      "slot": [
+        3,
+        1
+      ]
+    }
+  ],
+  "par_actions": 15
+}

@@ -1,0 +1,54 @@
+{
+ "id": "FX_stair_walk",
+ "title": "FX_stair_walk",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [],
+ "player": {
+  "hour": 12,
+  "slot": [
+   1,
+   1
+  ]
+ },
+ "objects": [
+  {
+   "id": "s",
+   "type": "stair",
+   "hour": 12,
+   "slot": [
+    2,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false,
+   "links_to": {
+    "hour": 2,
+    "slot": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "id": "ex",
+   "type": "exit",
+   "hour": 12,
+   "slot": [
+    3,
+    1
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}

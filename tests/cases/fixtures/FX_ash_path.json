@@ -1,0 +1,56 @@
+{
+ "id": "FX_ash_path",
+ "title": "FX_ash_path",
+ "act": 1,
+ "spirit_mood": "amused",
+ "grid": {
+  "w": 5,
+  "h": 3
+ },
+ "sun": {
+  "start_index": 0,
+  "actions_per_hour": 3
+ },
+ "rooms": [
+  {
+   "hour": 12,
+   "terrain": [
+    "..~..",
+    ".....",
+    "....."
+   ]
+  }
+ ],
+ "player": {
+  "hour": 12,
+  "slot": [
+   1,
+   0
+  ]
+ },
+ "objects": [
+  {
+   "id": "ap",
+   "type": "ash_path",
+   "hour": 12,
+   "slot": [
+    2,
+    0
+   ],
+   "state": "INTACT",
+   "flammable": false
+  },
+  {
+   "id": "ex",
+   "type": "exit",
+   "hour": 12,
+   "slot": [
+    3,
+    0
+   ],
+   "state": "INTACT",
+   "flammable": false
+  }
+ ],
+ "shadows": []
+}
