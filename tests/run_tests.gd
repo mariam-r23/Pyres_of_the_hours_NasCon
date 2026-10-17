@@ -18,6 +18,8 @@ const SUITES := [
 	"res://tests/test_case_runner.gd",
 	"res://tests/test_presentation.gd",
 	"res://tests/test_views.gd",
+	"res://tests/test_progression.gd",
+	"res://tests/test_feedback.gd",
 ]
 
 ## Our own case file; every *.json in SHARED_CASES_DIR (Mariam's) runs too.
