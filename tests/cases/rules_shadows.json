@@ -1,0 +1,155 @@
+[
+ {
+  "name": "a DORMANT shadow does not block",
+  "level": "FX_shadow_dormant",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "an ACTIVE shadow blocks (hour passes after 3 actions)",
+  "level": "FX_shadow_active",
+  "actions": [
+   "wait",
+   "wait",
+   "wait",
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 3,
+   "reason": "shadow_blocks",
+   "actions_used": 3
+  }
+ },
+ {
+  "name": "burning next to an ACTIVE shadow destroys it",
+  "level": "FX_shadow_kill",
+  "actions": [
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 5
+  }
+ },
+ {
+  "name": "burning before the shadow wakes does not destroy it",
+  "level": "FX_shadow_early",
+  "actions": [
+   "burn:right",
+   "move:right",
+   "wait",
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 3,
+   "reason": "shadow_blocks",
+   "actions_used": 3
+  }
+ },
+ {
+  "name": "a diagonal shadow is not in the 4-neighborhood",
+  "level": "FX_shadow_diag",
+  "actions": [
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:down",
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 4,
+   "reason": "shadow_blocks",
+   "actions_used": 4
+  }
+ },
+ {
+  "name": "a shadow in another room is not destroyed",
+  "level": "FX_shadow_room",
+  "actions": [
+   "burn:down",
+   "wait",
+   "move:right",
+   "interact",
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 4,
+   "reason": "shadow_blocks",
+   "actions_used": 4
+  }
+ },
+ {
+  "name": "a dormant shadow can be stood on; waiting as its hour passes is rejected and free",
+  "level": "FX_wake_self",
+  "actions": [
+   "move:right",
+   "wait"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "shadow_wakes_on_you",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "moving off the shadow's tile lets it wake harmlessly",
+  "level": "FX_wake_self",
+  "actions": [
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": false,
+   "failed": false,
+   "actions_used": 2
+  }
+ },
+ {
+  "name": "moving onto a tile where a shadow wakes is rejected and free",
+  "level": "FX_wake_move",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "shadow_wakes_on_you",
+   "actions_used": 0
+  }
+ },
+ {
+  "name": "arriving by stair on a tile where a shadow wakes is rejected",
+  "level": "FX_wake_stair",
+  "actions": [
+   "wait",
+   "interact"
+  ],
+  "expect": {
+   "rejected_at": 1,
+   "reason": "shadow_wakes_on_you",
+   "actions_used": 1
+  }
+ },
+ {
+  "name": "with sun.start_index 1 hour 12 is already passed, so its shadow starts active",
+  "level": "FX_start_index",
+  "actions": [
+   "move:right"
+  ],
+  "expect": {
+   "rejected_at": 0,
+   "reason": "shadow_blocks",
+   "actions_used": 0
+  }
+ }
+]

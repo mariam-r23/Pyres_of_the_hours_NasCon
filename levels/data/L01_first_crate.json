@@ -1,0 +1,30 @@
+{
+  "id": "L01_first_crate",
+  "title": "Something Warm",
+  "act": 1,
+  "spirit_mood": "amused",
+  "mood_weights": { "amused": 0.6, "annoyed": 0.2, "triumphant": 0.2 },
+  "grid": { "w": 5, "h": 5 },
+  "sun": { "start_index": 0, "actions_per_hour": 3 },
+  "rooms": [
+    { "hour": 12, "terrain": [".....", ".....", ".....", ".....", "....."] },
+    { "hour": 2,  "terrain": ["..~..", "..~..", "..~..", "..~..", "..~.."] }
+  ],
+  "player": { "hour": 12, "slot": [0, 2] },
+  "objects": [
+    {
+      "id": "crate_a", "type": "crate", "hour": 12, "slot": [2, 2],
+      "state": "INTACT", "flammable": true,
+      "ash_link": { "hour": 2, "slot": [2, 2], "becomes": "ash_path" }
+    },
+    {
+      "id": "stair_12", "type": "stair", "hour": 12, "slot": [4, 2],
+      "state": "INTACT", "flammable": false,
+      "links_to": { "hour": 2, "slot": [0, 2] }
+    },
+    { "id": "exit_1", "type": "exit", "hour": 2, "slot": [4, 2], "state": "INTACT", "flammable": false }
+  ],
+  "shadows": [],
+  "par_actions": 10,
+  "spirit_lines": { "on_burn": "Oh, that was fun.", "on_solve": "You're no fun when you win." }
+}
