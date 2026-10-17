@@ -12,6 +12,21 @@ const LevelList := preload("res://presentation/level_list.gd")
 const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
 const SpiritDirectorScript := preload("res://presentation/spirit_director.gd")
 const FxQueueScript := preload("res://presentation/fx_queue.gd")
+const Progress := preload("res://presentation/menus/progress.gd")
+const MainMenuScript := preload("res://presentation/menus/main_menu.gd")
+const LevelSelectScript := preload("res://presentation/menus/level_select.gd")
+const PauseMenuScript := preload("res://presentation/menus/pause_menu.gd")
+const CreditsScript := preload("res://presentation/menus/credits.gd")
+const MenuStyle := preload("res://presentation/menus/menu_style.gd")
+
+## What the screen is doing. Game input reaches the controller only in PLAYING.
+const MODE_MENU := "menu"                  # main menu over the clock
+const MODE_PLAYING := "playing"
+const MODE_PAUSED := "paused"
+const MODE_LEVEL_SELECT := "level_select"
+const MODE_CREDITS := "credits"
+
+const RETURN_PROMPT := "\n\nPress Enter to return to the main menu."
 const Sun := preload("res://core/sun.gd")
 
 const WON_NEXT_TEXT := "You reached the exit.\nPress N for the next level, R to restart."
@@ -94,6 +109,21 @@ var _loading_path := ""
 var _ending_text := ""
 ## Shadow rise / dissipate animations, held while the ripple shot plays.
 var fx := FxQueueScript.new()
+## Screen mode (MODE_*), and where Level Select / Credits go back to.
+var mode := MODE_MENU
+var _back_mode := MODE_MENU
+## True once a level was started from a menu (the HUD shows only then).
+var _in_game := false
+## Saved progress (presentation/menus/progress.gd). Tests point the path elsewhere.
+var progress_path := Progress.PATH
+var progress := {}
+var level_ids: Array = []
+var _menu_layer: CanvasLayer
+var _hud_layer: CanvasLayer
+var _open_menu: Control = null
+var _return_button: Button
+## True once the ending choice was made: Enter returns to the main menu.
+var _ending_done := false
 ## True when the next redraw should tween passed-hour grades (an hour passed).
 var _animate_grades := false
 
@@ -119,7 +149,8 @@ func _ready() -> void:
 	ripple.name = "RippleCamera"
 	ripple.bus = bus
 	add_child(ripple)
-	controller.blocker = ripple
+	# Keys reach the controller only while playing and no ripple shot runs.
+	controller.blocker = InputGate.new([ripple.is_playing, func(): return mode != MODE_PLAYING])
 	for type in ["undo_done", "level_loaded"]:
 		bus.connect(type, func(_arg): ripple.cancel())
 	bus.level_restarted.connect(ripple.cancel)
@@ -165,18 +196,216 @@ func _ready() -> void:
 	bus.level_restarted.connect(func(): _ending_text = "")
 	controller.burn_mode_changed.connect(_on_burn_mode_changed)
 
+	level_ids = LevelList.all().map(func(e): return e["id"])
+	progress = Progress.load_from(progress_path, level_ids)
+	bus.level_won.connect(_on_level_won_progress)
+	bus.undo_done.connect(func(_event): _ending_done = false)
+	bus.level_restarted.connect(func(): _ending_done = false)
+
+	# The first level stays loaded behind the main menu as a backdrop.
 	var first = LevelList.first()
 	if first == null:
 		_show_message(NO_LEVELS_TEXT)
 	else:
 		load_entry(first)
+	show_main_menu()
+
+
+## Something with is_playing(): true while any check says input is blocked.
+class InputGate:
+	var checks: Array
+
+	func _init(p_checks: Array) -> void:
+		checks = p_checks
+
+	func is_playing() -> bool:
+		for check in checks:
+			if check.call():
+				return true
+		return false
+
+
+# --- Menus -----------------------------------------------------------------
+
+func show_main_menu() -> void:
+	ripple.cancel()
+	_in_game = false
+	_ending_done = false
+	_set_mode(MODE_MENU)
+	var menu: Control = MainMenuScript.new()
+	menu.show_continue = Progress.has_progress(progress)
+	menu.chosen.connect(_on_main_menu)
+	_open(menu)
+
+
+func _on_main_menu(action: String) -> void:
+	match action:
+		"continue":
+			start_level(Progress.continue_level(progress, level_ids))
+		"new_game":
+			# Starts the first level; earlier progress stays (nothing is wiped).
+			start_level(level_ids[0] if not level_ids.is_empty() else "")
+		"level_select":
+			open_level_select(MODE_MENU)
+		"credits":
+			open_credits(MODE_MENU)
+		"quit":
+			get_tree().quit()
+
+
+## True if `id` is a known level that progress has unlocked.
+func can_start(id: String) -> bool:
+	return level_ids.has(id) and Progress.is_unlocked(progress, id)
+
+
+## Starts an unlocked level from a menu. Returns false (and does nothing) for
+## a locked or unknown level.
+func start_level(id: String) -> bool:
+	if not can_start(id):
+		return false
+	var entry := {"id": id, "path": LevelList.DEFAULT_DIR.path_join(id + ".json")}
+	_close_menu()
+	_in_game = true
+	_set_mode(MODE_PLAYING)
+	load_entry(entry)
+	return true
+
+
+func pause() -> void:
+	if mode != MODE_PLAYING:
+		return
+	ripple.skip()  # a shot in progress ends cleanly (arrival revealed)
+	controller.cancel_burn_mode()
+	_set_mode(MODE_PAUSED)
+	var menu: Control = PauseMenuScript.new()
+	menu.chosen.connect(_on_pause_menu)
+	_open(menu)
+
+
+func resume() -> void:
+	if mode != MODE_PAUSED:
+		return
+	_close_menu()
+	_set_mode(MODE_PLAYING)
+	director.note_activity()
+
+
+func _on_pause_menu(action: String) -> void:
+	match action:
+		"resume":
+			resume()
+		"restart":
+			resume()
+			controller.restart()
+		"level_select":
+			open_level_select(MODE_PAUSED)
+		"main_menu":
+			show_main_menu()
+
+
+func open_level_select(back_to: String) -> void:
+	_back_mode = back_to
+	_set_mode(MODE_LEVEL_SELECT)
+	var menu: Control = LevelSelectScript.new()
+	menu.rows = LevelSelectScript.build_rows(LevelList.all(), progress)
+	menu.chosen.connect(_on_level_select)
+	_open(menu)
+
+
+func _on_level_select(action: String, id: String) -> void:
+	if action == "start":
+		start_level(id)
+	else:
+		go_back()
+
+
+func open_credits(back_to: String) -> void:
+	_back_mode = back_to
+	_set_mode(MODE_CREDITS)
+	var menu: Control = CreditsScript.new()
+	menu.chosen.connect(func(_action): go_back())
+	_open(menu)
+
+
+## Level Select / Credits: back to where they were opened from.
+func go_back() -> void:
+	if _back_mode == MODE_PAUSED:
+		_set_mode(MODE_PLAYING)  # pause() needs PLAYING
+		pause()
+	else:
+		show_main_menu()
+
+
+## What Escape does right now: "cancel_burn" (the controller handles it),
+## "pause", "resume", "back" or "none".
+func escape_action() -> String:
+	match mode:
+		MODE_PLAYING:
+			return "cancel_burn" if controller.burn_mode else "pause"
+		MODE_PAUSED:
+			return "resume"
+		MODE_LEVEL_SELECT, MODE_CREDITS:
+			return "back"
+	return "none"
+
+
+## Runs before the controller (and the GUI) sees the key: Escape order is
+## burn mode first, then pause. The ripple camera, a child, consumes keys
+## during a shot before this runs.
+func _input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	if key.keycode == KEY_ESCAPE:
+		match escape_action():
+			"pause":
+				pause()
+			"resume":
+				resume()
+			"back":
+				go_back()
+			_:
+				return  # cancel_burn: let the controller have it
+		get_viewport().set_input_as_handled()
+	elif _ending_done and mode == MODE_PLAYING and key.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+		show_main_menu()
+		get_viewport().set_input_as_handled()
+
+
+func _set_mode(new_mode: String) -> void:
+	mode = new_mode
+	director.suspended = mode != MODE_PLAYING
+	if _hud_layer != null:
+		_hud_layer.visible = _in_game
+	if mode != MODE_PLAYING:
+		controller.cancel_burn_mode()
+
+
+func _open(menu: Control) -> void:
+	_close_menu()
+	_open_menu = menu
+	_menu_layer.add_child(menu)
+
+
+func _close_menu() -> void:
+	if _open_menu != null and is_instance_valid(_open_menu):
+		_open_menu.queue_free()
+	_open_menu = null
+
+
+## Progress is written only when a level is won.
+func _on_level_won_progress(event: Dictionary) -> void:
+	if level_id == "":
+		return
+	progress = Progress.record_win(progress, level_id, int(event["actions_used"]), level_ids)
+	Progress.save_to(progress_path, progress)
 
 
 ## Progression keys. The controller sees keys first (it is a child) and
 ## lets through the ones it does not use.
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo:
+	if key == null or not key.pressed or key.echo or mode != MODE_PLAYING:
 		return
 	# Debug fallback for the ending choice until ui/ has its screen.
 	if director.ending_pending and key.keycode in [KEY_1, KEY_2]:
@@ -323,6 +552,7 @@ func _refresh() -> void:
 		_show_message(end_message(state.status, LevelList.next_of(level_id) != null))
 	_status.text = status_text(level_meta, level_id, state)
 	_update_context_hint()
+	_return_button.visible = _ending_done
 	bus.hud_changed.emit(hud_info(level_id, level_meta, state))
 
 
@@ -369,7 +599,8 @@ func hide_speech() -> void:
 
 func _on_ending_chosen(choice: String) -> void:
 	if ENDING_TEXTS.has(choice):
-		_ending_text = ENDING_TEXTS[choice]
+		_ending_text = ENDING_TEXTS[choice] + RETURN_PROMPT
+		_ending_done = true
 		_queue_refresh()
 
 
@@ -469,6 +700,21 @@ func _build_world() -> void:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	_hud_layer = layer
+	_menu_layer = CanvasLayer.new()
+	_menu_layer.layer = 10  # menus above the HUD
+	add_child(_menu_layer)
+
+	# After the ending: a clickable way back too (Enter also works).
+	_return_button = MenuStyle.button("Return to main menu", 1.0)
+	_return_button.theme = MenuStyle.theme(1.0)
+	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_return_button.offset_top = -150
+	_return_button.offset_bottom = -110
+	_return_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_return_button.visible = false
+	_return_button.pressed.connect(show_main_menu)
+	layer.add_child(_return_button)
 
 	_message = Label.new()
 	# Centered over the dial hub, the one empty spot between the rooms.

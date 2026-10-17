@@ -134,6 +134,11 @@ static func key_to_action(keycode: Key, in_burn_mode: bool) -> Dictionary:
 	return {}
 
 
+## Leaves burn mode (e.g. when the game is paused). Emits burn_mode_changed.
+func cancel_burn_mode() -> void:
+	_set_burn_mode(false)
+
+
 func _set_burn_mode(active: bool) -> void:
 	if burn_mode == active:
 		return
