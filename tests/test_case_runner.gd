@@ -53,8 +53,14 @@ func test_missing_level_fails() -> bool:
 	return true
 
 
+## Must not depend on what Mariam puts in levels/data/ or tests/cases/.
 func test_level_lookup_order() -> bool:
-	check_eq(CaseRunner.resolve_level("L01_first_crate"), "res://tests/fixtures/L01_first_crate.json", "falls back to tests/fixtures")
+	# T01_wall exists only in tests/fixtures/, so the default lookup falls back to it.
+	check_eq(CaseRunner.resolve_level("T01_wall"), "res://tests/fixtures/T01_wall.json", "falls back to tests/fixtures")
+	# levels/data/ wins over tests/fixtures/, but only check it when such a level exists.
+	if FileAccess.file_exists("res://levels/data/L01_first_crate.json"):
+		check_eq(CaseRunner.resolve_level("L01_first_crate"), "res://levels/data/L01_first_crate.json", "levels/data wins")
+	# Explicit folder lists: independent of the shared folders.
 	check_eq(CaseRunner.resolve_level("L01_first_crate", ["res://tests/", "res://tests/fixtures/"]),
 		"res://tests/fixtures/L01_first_crate.json", "skips folders without the file")
 	check_eq(CaseRunner.resolve_level("L01_first_crate", ["res://tests/"]), "", "not found")
