@@ -90,27 +90,29 @@
   }
  },
  {
-  "name": "waiting while a shadow would wake on you is rejected and free",
+  "name": "a dormant shadow can be stood on; waiting as its hour passes is rejected and free",
   "level": "FX_wake_self",
   "actions": [
+   "move:right",
    "wait"
   ],
   "expect": {
-   "rejected_at": 0,
+   "rejected_at": 1,
    "reason": "shadow_wakes_on_you",
-   "actions_used": 0
+   "actions_used": 1
   }
  },
  {
-  "name": "moving away from a waking shadow is fine",
+  "name": "moving off the shadow's tile lets it wake harmlessly",
   "level": "FX_wake_self",
   "actions": [
+   "move:right",
    "move:right"
   ],
   "expect": {
    "won": false,
    "failed": false,
-   "actions_used": 1
+   "actions_used": 2
   }
  },
  {

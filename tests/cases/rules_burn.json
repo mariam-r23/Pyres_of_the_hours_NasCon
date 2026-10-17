@@ -25,14 +25,14 @@
   }
  },
  {
-  "name": "burning off the grid is rejected",
+  "name": "burning off the grid finds nothing to burn",
   "level": "FX_burn_basic",
   "actions": [
    "burn:left"
   ],
   "expect": {
    "rejected_at": 0,
-   "reason": "out_of_bounds",
+   "reason": "nothing_to_burn",
    "actions_used": 0
   }
  },

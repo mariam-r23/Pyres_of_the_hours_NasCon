@@ -23,7 +23,7 @@ DIRS: Dict[str, Tuple[int, int]] = {
 
 INTACT, ASH, GONE = "INTACT", "ASH", "GONE"
 OBJ_STATES = (INTACT, ASH, GONE)
-PLAYING, WON, FAILED = "PLAYING", "WON", "FAILED"
+PLAYING, WON, FAILED = "playing", "won", "failed"  # section 11 item 15
 
 Pos = Tuple[int, int, int]  # (hour, x, y)
 

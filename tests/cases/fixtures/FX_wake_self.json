@@ -9,7 +9,7 @@
  },
  "sun": {
   "start_index": 0,
-  "actions_per_hour": 1
+  "actions_per_hour": 2
  },
  "rooms": [],
  "player": {
@@ -37,7 +37,7 @@
    "id": "sh",
    "hour": 12,
    "slot": [
-    0,
+    1,
     1
    ]
   }

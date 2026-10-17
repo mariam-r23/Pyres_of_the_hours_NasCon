@@ -8,7 +8,8 @@ Chooses WHICH MOOD and WHICH CACHED LINE the fire spirit uses. Dialogue only: ne
 ```gdscript
 var lines: Array = JSON.parse_string(FileAccess.get_file_as_string("res://dialogue/lines.json"))["lines"]
 var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://dialogue/picker_config.json"))
-var picker := DialoguePicker.new(lines, config, level_id)
+const Picker = preload("res://dialogue/dialogue_picker.gd")  # preload, not class_name
+var picker := Picker.new(lines, config, level_id)
 var ctx := {"act": level["act"], "spirit_mood": level["spirit_mood"], "mood_weights": level.get("mood_weights", {})}
 
 var r := picker.say("on_burn", ctx)     # {mood, line, tier, repeated}; line == {} if nothing fits

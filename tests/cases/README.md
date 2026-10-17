@@ -5,7 +5,7 @@ Both implementations (Python reference and Anosha's GDScript) must pass every ca
 
 - **A file holds a list of cases** (6.4 shows one object; a single object is also fine). Please support both.
 - **Level resolution:** `level` is a level id. Look for `<id>.json` in `levels/data/`, then in
-  `tests/cases/fixtures/`. Fixtures are tiny rule-test levels. They are NOT in `levels/data/` so that
+  `tests/cases/fixtures/`, then `tests/fixtures/`. Fixtures are tiny rule-test levels. They are NOT in `levels/data/` so that
   `validate_levels` never scans them.
 - `actions`: `move:<dir>`, `burn:<dir>`, `interact`, `wait` (dir = up, down, left, right).
 - **Runner semantics:** apply actions in order.

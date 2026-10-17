@@ -132,10 +132,17 @@ def load_level_from_dict(data: Dict[str, Any]) -> Level:
         if (hr, x, y) in slots:
             _fail(f"{p}.slot", f"slot already holds object {slots[(hr, x, y)]!r} (one object per slot)")
         slots[(hr, x, y)] = oid
+        tile = terrain[hr][y][x]
+        if tile == WALL:
+            _fail(f"{p}.slot", "object is placed on a wall")
+        if tile == CHASM and otype not in ("bridge", "ash_path"):
+            _fail(f"{p}.slot", f"{otype} placed on a chasm (only a bridge or ash_path may sit on a chasm)")
         state = raw.get("state", INTACT)
         if state not in OBJ_STATES:
             _fail(f"{p}.state", f"must be one of {list(OBJ_STATES)}, got {state!r}")
-        flammable = raw.get("flammable", TYPES[otype].flammable)
+        if "flammable" not in raw:
+            _fail(f"{p}.flammable", "is required (true or false)")
+        flammable = raw["flammable"]
         if not isinstance(flammable, bool):
             _fail(f"{p}.flammable", "must be true or false")
         objects.append(GameObject(oid, otype, hr, x, y, state, flammable))
@@ -166,8 +173,14 @@ def load_level_from_dict(data: Dict[str, Any]) -> Level:
         elif raw.get("links_to") is not None:
             _fail(f"{p}.links_to", "only stairs have links_to")
 
-    if not any(o.type == "exit" for o in objects):
-        _fail("objects", "level has no exit object")
+    exits = [o.id for o in objects if o.type == "exit"]
+    if not exits:
+        _fail("objects", "level has no exit object (exactly one is required)")
+    if len(exits) > 1:
+        _fail("objects", f"{len(exits)} exit objects ({', '.join(exits)}), exactly one is required")
+    for o in objects:
+        if o.ash_link is not None and f"{o.id}_ash" in ids:
+            _fail("objects", f"id {o.id + '_ash'!r} clashes with the object {o.id!r} creates when burned")
 
     # --- player
     praw = _dict(data.get("player"), "player") if "player" in data else _fail("player", "is required")
@@ -179,6 +192,11 @@ def load_level_from_dict(data: Dict[str, Any]) -> Level:
     if terrain[ph][py][px] == CHASM and not (
             here and next(o for o in objects if o.id == here).type in ("bridge", "ash_path")):
         _fail("player.slot", "start tile is a chasm")
+
+    if here is not None:
+        hobj = next(o for o in objects if o.id == here)
+        if hobj.state == INTACT and hobj.type in ("crate", "door"):
+            _fail("player.slot", f"start tile holds INTACT {hobj.type} {hobj.id!r}, which blocks")
 
     # --- shadows
     shadows: List[Shadow] = []
@@ -192,8 +210,15 @@ def load_level_from_dict(data: Dict[str, Any]) -> Level:
         sids.add(sid)
         sh = _hour(raw, p)
         sx, sy = _slot(raw, p, w, h)
+        if sid in ids:
+            _fail(f"{p}.id", f"id {sid!r} is also used by an object")
         if terrain[sh][sy][sx] == WALL:
             _fail(f"{p}.slot", "shadow is placed on a wall")
+        there = slots.get((sh, sx, sy))
+        if there and next(o for o in objects if o.id == there).type == "exit":
+            _fail(f"{p}.slot", "shadow is placed on the exit")
+        if (sh, sx, sy) == (ph, px, py):
+            _fail(f"{p}.slot", "shadow is placed on the player start")
         shadows.append(Shadow(sid, sh, sx, sy))
 
     par = data.get("par_actions")

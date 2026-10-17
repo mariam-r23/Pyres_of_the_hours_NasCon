@@ -64,6 +64,95 @@ class Purity(unittest.TestCase):
             self.assertTrue(apply_action(s, a)["ok"])
 
 
+class AgreedNames(unittest.TestCase):
+    def test_created_ash_object_is_named_source_id_plus_ash_suffix(self):
+        s = GameState.initial(lv("L01_first_crate"))
+        for a in ({"type": "move", "dir": "right"}, {"type": "burn", "dir": "right"}):
+            s = apply_action(s, a)["state"]
+        made = next(o for o in s.objects if o.id == "crate_a_ash")
+        self.assertEqual((made.type, made.hour, made.flammable), ("ash_path", 2, False))
+
+    def test_rejection_reasons_use_the_agreed_strings(self):
+        def reason(level, actions, folder=FIXTURES):
+            s = GameState.initial(lv(level, folder))
+            for a in actions:
+                r = apply_action(s, run_cases.parse_action(a))
+                if not r["ok"]:
+                    return r["reason"]
+                s = r["state"]
+        self.assertEqual(reason("FX_wall", ["move:right"]), "blocked_terrain")
+        self.assertEqual(reason("FX_chasm", ["move:right"]), "blocked_terrain")
+        self.assertEqual(reason("FX_crate", ["move:right"]), "blocked_object")
+        self.assertEqual(reason("FX_stair_blocked", ["interact"]), "arrival_blocked")
+        self.assertEqual(reason("FX_burn_basic", ["burn:left"]), "nothing_to_burn")
+
+
+class SectionEleven(unittest.TestCase):
+    """Behaviour fixed in PROJECT_CONTEXT.md section 11 (Anosha's clarifications)."""
+
+    def small(self):
+        return load_level_from_dict({
+            "id": "T", "grid": {"w": 5, "h": 1}, "sun": {"start_index": 1, "actions_per_hour": 1},
+            "player": {"hour": 12, "slot": [0, 0]},
+            "objects": [
+                {"id": "c", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": True,
+                 "ash_link": {"hour": 4, "slot": [0, 0], "becomes": "ash_path"}},
+                {"id": "ex", "type": "exit", "hour": 10, "slot": [4, 0], "flammable": False}],
+            "shadows": [{"id": "k", "hour": 12, "slot": [2, 0]},
+                        {"id": "z", "hour": 2, "slot": [3, 0]}]})
+
+    def test_event_order_for_a_burn_that_kills_a_shadow_and_passes_an_hour(self):
+        r = apply_action(GameState.initial(self.small()), {"type": "burn", "dir": "right"})
+        self.assertTrue(r["ok"])
+        self.assertEqual([e["type"] for e in r["events"]],
+                         ["burned", "ash_moved", "shadow_destroyed", "sun_advanced", "hour_passed",
+                          "shadow_appeared", "action_applied"])
+        self.assertEqual(r["events"][2], {"type": "shadow_destroyed", "id": "k", "hour": 12})
+        self.assertEqual(r["events"][5]["id"], "z")
+
+    def test_terminal_events_come_after_action_applied(self):
+        s = GameState.initial(lv("FX_exit", FIXTURES))
+        r = apply_action(s, {"type": "move", "dir": "right"})
+        self.assertEqual([e["type"] for e in r["events"]][-2:], ["action_applied", "level_won"])
+
+    def test_shadows_active_at_load_emit_no_events(self):
+        s = GameState.initial(self.small())
+        r = apply_action(s, {"type": "wait"})
+        self.assertNotIn({"type": "shadow_appeared", "id": "k", "hour": 12, "slot": [2, 0]}, r["events"])
+
+    def test_status_strings_are_lowercase(self):
+        s = GameState.initial(lv("L01_first_crate"))
+        self.assertEqual(s.status, "playing")
+        g = Game(lv("L01_first_crate"))
+        for a in L01_SOLUTION:
+            g.do(a)
+        self.assertEqual(g.state.status, "won")
+
+    def test_undo_works_out_of_a_won_state_and_costs_nothing(self):
+        g = Game(lv("L01_first_crate"))
+        for a in L01_SOLUTION:
+            g.do(a)
+        self.assertEqual(g.do({"type": "wait"})["reason"], "level_over")
+        self.assertEqual(legal_actions(g.state), [])
+        r = g.undo()
+        self.assertEqual((r["ok"], r["events"]), (True, [{"type": "undo_done"}]))
+        self.assertEqual(g.state.status, "playing")
+
+    def test_nothing_to_undo_shape(self):
+        r = Game(lv("L01_first_crate")).undo()
+        self.assertEqual((r["ok"], r["reason"]), (False, "nothing_to_undo"))
+        self.assertEqual(r["events"], [{"type": "action_rejected", "reason": "nothing_to_undo"}])
+
+    def test_gone_counts_as_an_empty_slot(self):
+        d = {"id": "T", "grid": {"w": 3, "h": 1}, "player": {"hour": 12, "slot": [0, 0]},
+             "objects": [{"id": "g", "type": "crate", "hour": 12, "slot": [1, 0], "state": "GONE",
+                          "flammable": True},
+                         {"id": "ex", "type": "exit", "hour": 12, "slot": [2, 0], "flammable": False}]}
+        s = GameState.initial(load_level_from_dict(d))
+        self.assertEqual(apply_action(s, {"type": "burn", "dir": "right"})["reason"], "nothing_to_burn")
+        self.assertTrue(apply_action(s, {"type": "move", "dir": "right"})["ok"])
+
+
 class Events(unittest.TestCase):
     def test_burning_the_crate_in_l01_emits_the_section_6_3_events(self):
         s = GameState.initial(lv("L01_first_crate"))
@@ -205,7 +294,7 @@ class Loader(unittest.TestCase):
         return copy.deepcopy({
             "id": "T", "grid": {"w": 3, "h": 1},
             "player": {"hour": 12, "slot": [0, 0]},
-            "objects": [{"id": "ex", "type": "exit", "hour": 12, "slot": [2, 0]}],
+            "objects": [{"id": "ex", "type": "exit", "hour": 12, "slot": [2, 0], "flammable": False}],
         })
 
     def assertErrorNames(self, data, field):
@@ -225,17 +314,17 @@ class Loader(unittest.TestCase):
 
     def test_unknown_object_type(self):
         d = self.base()
-        d["objects"].append({"id": "a", "type": "banana", "hour": 12, "slot": [1, 0]})
+        d["objects"].append({"id": "a", "type": "banana", "hour": 12, "slot": [1, 0], "flammable": False})
         self.assertErrorNames(d, "objects[1].type")
 
     def test_duplicate_ids(self):
         d = self.base()
-        d["objects"].append({"id": "ex", "type": "crate", "hour": 12, "slot": [1, 0]})
+        d["objects"].append({"id": "ex", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": False})
         self.assertErrorNames(d, "objects[1].id")
 
     def test_two_objects_in_one_slot(self):
         d = self.base()
-        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [2, 0]})
+        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [2, 0], "flammable": False})
         self.assertErrorNames(d, "objects[1].slot")
 
     def test_slot_outside_the_grid(self):
@@ -261,19 +350,19 @@ class Loader(unittest.TestCase):
     def test_ash_link_into_a_wall(self):
         d = self.base()
         d["rooms"] = [{"hour": 2, "terrain": ["#.."]}]
-        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [1, 0],
+        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": False,
                              "ash_link": {"hour": 2, "slot": [0, 0], "becomes": "ash_path"}})
         self.assertErrorNames(d, "objects[1].ash_link.slot")
 
     def test_ash_link_onto_an_existing_object(self):
         d = self.base()
-        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [1, 0],
+        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": False,
                              "ash_link": {"hour": 12, "slot": [2, 0], "becomes": "ash_path"}})
         self.assertErrorNames(d, "objects[1].ash_link.slot")
 
     def test_stair_needs_links_to(self):
         d = self.base()
-        d["objects"].append({"id": "s", "type": "stair", "hour": 12, "slot": [1, 0]})
+        d["objects"].append({"id": "s", "type": "stair", "hour": 12, "slot": [1, 0], "flammable": False})
         self.assertErrorNames(d, "objects[1].links_to")
 
     def test_player_on_a_wall(self):
@@ -291,6 +380,46 @@ class Loader(unittest.TestCase):
         d = self.base()
         d["spirit_mood"] = "happy"
         self.assertErrorNames(d, "spirit_mood")
+
+    def test_flammable_is_required_on_every_object(self):
+        d = self.base()
+        del d["objects"][0]["flammable"]
+        self.assertErrorNames(d, "objects[0].flammable")
+
+    def test_exactly_one_exit(self):
+        d = self.base()
+        d["objects"].append({"id": "ex2", "type": "exit", "hour": 12, "slot": [1, 0], "flammable": False})
+        self.assertErrorNames(d, "objects")
+
+    def test_crate_on_a_chasm_is_rejected(self):
+        d = self.base()
+        d["rooms"] = [{"hour": 12, "terrain": [".~."]}]
+        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": True})
+        self.assertErrorNames(d, "objects[1].slot")
+
+    def test_shadow_on_the_exit_or_the_player_start_is_rejected(self):
+        for slot in ([2, 0], [0, 0]):
+            d = self.base()
+            d["shadows"] = [{"id": "s", "hour": 12, "slot": slot}]
+            self.assertErrorNames(d, "shadows[0].slot")
+
+    def test_shadow_id_may_not_reuse_an_object_id(self):
+        d = self.base()
+        d["shadows"] = [{"id": "ex", "hour": 12, "slot": [1, 0]}]
+        self.assertErrorNames(d, "shadows[0].id")
+
+    def test_object_may_not_be_named_like_a_created_ash_object(self):
+        d = self.base()
+        d["objects"] += [
+            {"id": "c", "type": "crate", "hour": 12, "slot": [1, 0], "flammable": True,
+             "ash_link": {"hour": 2, "slot": [0, 0], "becomes": "ash_path"}},
+            {"id": "c_ash", "type": "ash_path", "hour": 4, "slot": [0, 0], "flammable": False}]
+        self.assertErrorNames(d, "objects")
+
+    def test_player_start_on_an_intact_crate_is_rejected(self):
+        d = self.base()
+        d["objects"].append({"id": "c", "type": "crate", "hour": 12, "slot": [0, 0], "flammable": True})
+        self.assertErrorNames(d, "player.slot")
 
     def test_every_shipped_level_and_fixture_loads(self):
         for folder in (LEVELS, FIXTURES):

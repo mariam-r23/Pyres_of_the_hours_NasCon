@@ -66,7 +66,8 @@
           1
         ],
         "becomes": "ash_path"
-      }
+      },
+      "state": "INTACT"
     },
     {
       "id": "gate_a",
@@ -84,7 +85,8 @@
           1
         ],
         "becomes": "ash_path"
-      }
+      },
+      "state": "INTACT"
     },
     {
       "id": "stair_12",
@@ -100,7 +102,9 @@
           0,
           1
         ]
-      }
+      },
+      "state": "INTACT",
+      "flammable": false
     },
     {
       "id": "stair_2",
@@ -116,7 +120,9 @@
           0,
           1
         ]
-      }
+      },
+      "state": "INTACT",
+      "flammable": false
     },
     {
       "id": "exit_1",
@@ -125,7 +131,9 @@
       "slot": [
         4,
         1
-      ]
+      ],
+      "state": "INTACT",
+      "flammable": false
     }
   ],
   "shadows": [

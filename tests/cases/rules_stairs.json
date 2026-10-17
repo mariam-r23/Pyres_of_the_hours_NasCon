@@ -58,7 +58,7 @@
   ],
   "expect": {
    "rejected_at": 0,
-   "reason": "stair_blocked",
+   "reason": "arrival_blocked",
    "actions_used": 0
   }
  },
@@ -72,7 +72,7 @@
   ],
   "expect": {
    "rejected_at": 2,
-   "reason": "stair_blocked",
+   "reason": "arrival_blocked",
    "actions_used": 2
   }
  },

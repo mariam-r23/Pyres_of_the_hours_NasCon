@@ -4,7 +4,7 @@ Second, independent implementation of `PROJECT_CONTEXT.md` section 3. No depende
 It is the team's safety net: Anosha's GDScript must agree with it on every shared case.
 
     cd reference/python
-    python -m unittest discover -s tests -v      # 38 tests (includes all shared cases)
+    python -m unittest discover -s tests -v      # 76 tests (includes all shared cases)
     python run_cases.py                          # just the shared JSON cases
     python validate_levels.py                    # id, valid, solvable, shortest, par (exit 1 on failure)
     python play.py ../../levels/data/L01_first_crate.json          # play in the terminal
@@ -15,19 +15,31 @@ API names mirror section 6.2: `load_level_from_dict`, `apply_action(state, actio
 `{ok, events, state, reason}`, `legal_actions(state)`, `state.hash_key()`, `state.duplicate_deep()`,
 `undo(stack)`, `is_hour_passed(state, hour)`. Events follow section 6.3.
 
-## Decisions where section 3 is silent or ambiguous (team: confirm, then I add them to the bible)
-1. **`rejected_at` is a 0-based index** into the case's `actions` list (6.4 does not say).
-2. **`wait` and `shadow_wakes_on_you`.** 3.3 says wait is never rejected; 3.5 says any action that would wake a shadow
-   on the player's tile is invalid. I apply 3.5 to `wait` too (there is no "caught" outcome any more, so a wake on
-   the player has to be refused). Move away instead.
-3. **Burn's "4-neighborhood"** means the four adjacent slots only, not the burned slot itself.
-4. **Arriving on an `exit` by `interact`** counts as stepping onto it (win).
-5. **A burned object stays in its slot as an `ASH` object**, so an ash link into that slot is "occupied".
-6. **Shadow activity is derived**: active = its hour is passed and it is not destroyed. With `sun.start_index > 0`,
-   earlier hours are passed (and their shadows active) from the first action.
-7. **Fail reason** is `dial_complete`. Rejection reasons beyond section 3: `out_of_bounds wall chasm blocked
-   shadow_blocks not_on_stair stair_blocked nothing_to_burn not_intact not_flammable level_over`.
-8. Ids of objects created by ash links (`<source id>>ash`) are an implementation detail, not part of the contract.
+## Section 11 compliance (Anosha's clarifications are part of the spec)
+Matches `docs/PROJECT_CONTEXT.md` section 11: exact rejection reasons (item 11), event order (item 14),
+`<source id>_ash` ids and default `flammable` table (item 13), lowercase `playing/won/failed` (item 15),
+`level_over` for every action after a win or fail including `wait`, `legal_actions` empty then (item 3, 15),
+undo is free, allowed out of a won or failed state, emits only `undo_done`, and `nothing_to_undo` otherwise
+(items 2, 17), `GONE` counts as an empty slot (item 7), shadow on a wall rejected by the loader (item 8),
+`wait` rejected when it would wake a shadow on the player (item 4), burn's neighbourhood excludes the burned slot
+(item 5), `dial_complete` (item 6). The loader mirrors `core/level_loader.gd` and `core/level_validator.gd`
+(`flammable` required on every object, exactly one exit, only a bridge or ash_path on a chasm, no shadow on the
+exit or the player start, ids unique across objects and shadows, no object named like a created `<id>_ash`).
+
+## Choices where the spec is silent (not in section 11; confirm if you disagree)
+1. Arriving on the `exit` by `interact` counts as stepping onto it (win).
+2. Burning off the grid returns `nothing_to_burn`.
+3. Walkability reasons are checked in the same order as `core/walkability.gd`: bounds, wall, bare chasm
+   (both `blocked_terrain`), then `blocked_object`.
+
+## Rejection reasons (use these exact strings)
+- move: `out_of_bounds`, `blocked_terrain`, `blocked_object`, `shadow_blocks`
+- interact: `not_on_stair`, `arrival_blocked`
+- burn: `nothing_to_burn`, `not_flammable`, `not_intact`, `ash_target_occupied`
+- any action: `shadow_wakes_on_you`
+- after a win or fail: `level_over`
+- malformed action: `unknown_action` (the Python also uses `bad_direction` for a bad `dir`; use `unknown_action` in
+  anything compared against GDScript)
 
 ## What was dropped from the old reference (and why)
 Doorways (now stairs), terrain `E` (now an `exit` object), compass burn directions (now up/down/left/right),

@@ -55,28 +55,28 @@ files = {}
 # ------------------------------------------------------------------ movement and terrain
 mv = []
 f = fx("FX_wall", [far_exit()], player=(12, 1, 0), rooms={12: ["..#..", ".....", "....."]})
-mv.append(case("wall blocks and the rejection is free", f, [R], rejected_at=0, reason="wall", actions_used=0))
+mv.append(case("wall blocks and the rejection is free", f, [R], rejected_at=0, reason="blocked_terrain", actions_used=0))
 f = fx("FX_edge", [far_exit()], player=(12, 0, 0))
 mv.append(case("moving off the grid is rejected", f, [U], rejected_at=0, reason="out_of_bounds", actions_used=0))
 mv.append(case("a rejected action does not count (one valid wait, then a rejection)", f, [W, U],
                rejected_at=1, reason="out_of_bounds", actions_used=1))
 f = fx("FX_chasm", [far_exit()], player=(12, 1, 0), rooms={12: ["..~..", ".....", "....."]})
-mv.append(case("a chasm blocks without a filler", f, [R], rejected_at=0, reason="chasm", actions_used=0))
+mv.append(case("a chasm blocks without a filler", f, [R], rejected_at=0, reason="blocked_terrain", actions_used=0))
 f = fx("FX_bridge", [obj("br", "bridge", 12, 2, 0), obj("ex", "exit", 12, 3, 0)], player=(12, 1, 0),
        rooms={12: ["..~..", ".....", "....."]})
 mv.append(case("an INTACT bridge makes a chasm walkable", f, [R, R], won=True, failed=False, actions_used=2))
 f = fx("FX_bridge_burn", [obj("br", "bridge", 12, 2, 0), far_exit()], player=(12, 2, 1),
        rooms={12: ["..~..", ".....", "....."]})
 mv.append(case("burning the bridge makes the chasm block again", f, ["burn:up", U],
-               rejected_at=1, reason="chasm", actions_used=1))
+               rejected_at=1, reason="blocked_terrain", actions_used=1))
 f = fx("FX_ash_path", [obj("ap", "ash_path", 12, 2, 0), obj("ex", "exit", 12, 3, 0)], player=(12, 1, 0),
        rooms={12: ["..~..", ".....", "....."]})
 mv.append(case("an ash_path is walkable on a chasm", f, [R, R], won=True, actions_used=2))
 f = fx("FX_crate", [obj("cr", "crate", 12, 2, 1), obj("ex", "exit", 12, 3, 1)], player=(12, 1, 1))
-mv.append(case("an INTACT crate blocks", f, [R], rejected_at=0, reason="blocked", actions_used=0))
+mv.append(case("an INTACT crate blocks", f, [R], rejected_at=0, reason="blocked_object", actions_used=0))
 mv.append(case("burning a crate leaves walkable rubble", f, ["burn:right", R, R], won=True, actions_used=3))
 f = fx("FX_door", [obj("dr", "door", 12, 2, 1), obj("ex", "exit", 12, 3, 1)], player=(12, 1, 1))
-mv.append(case("an INTACT door blocks", f, [R], rejected_at=0, reason="blocked", actions_used=0))
+mv.append(case("an INTACT door blocks", f, [R], rejected_at=0, reason="blocked_object", actions_used=0))
 mv.append(case("a burned door is open", f, ["burn:right", R, R], won=True, actions_used=3))
 f = fx("FX_exit", [obj("ex", "exit", 12, 1, 1)], player=(12, 0, 1))
 mv.append(case("stepping onto the exit wins", f, [R], won=True, failed=False, actions_used=1))
@@ -95,11 +95,11 @@ st.append(case("stairs are one way unless a return stair exists", f, ["interact"
                rejected_at=1, reason="not_on_stair", actions_used=1))
 f = fx("FX_stair_blocked", [obj("s", "stair", 12, 0, 1, to=(2, 1, 1)), obj("c", "crate", 2, 1, 1), far_exit()],
        player=(12, 0, 1))
-st.append(case("a blocked arrival slot rejects interact", f, ["interact"], rejected_at=0, reason="stair_blocked", actions_used=0))
+st.append(case("a blocked arrival slot rejects interact", f, ["interact"], rejected_at=0, reason="arrival_blocked", actions_used=0))
 f = fx("FX_stair_shadow", [obj("s", "stair", 12, 0, 1, to=(2, 1, 1)), far_exit()], player=(12, 0, 1),
        shadows=[("sh", 2, 1, 1)], apH=1)
 st.append(case("an ACTIVE shadow on the arrival slot rejects interact", f, [W, W, "interact"],
-               rejected_at=2, reason="stair_blocked", actions_used=2))
+               rejected_at=2, reason="arrival_blocked", actions_used=2))
 st.append(case("a DORMANT shadow on the arrival slot does not block interact", f, ["interact"],
                won=False, failed=False, actions_used=1))
 files["rules_stairs.json"] = st
@@ -110,7 +110,7 @@ f = fx("FX_burn_basic", [obj("cr", "crate", 12, 1, 1), far_exit()], player=(12, 
 bn.append(case("burning an empty slot is rejected", f, ["burn:up"], rejected_at=0, reason="nothing_to_burn", actions_used=0))
 bn.append(case("burning twice is rejected (not INTACT)", f, ["burn:right", "burn:right"],
                rejected_at=1, reason="not_intact", actions_used=1))
-bn.append(case("burning off the grid is rejected", f, ["burn:left"], rejected_at=0, reason="out_of_bounds", actions_used=0))
+bn.append(case("burning off the grid finds nothing to burn", f, ["burn:left"], rejected_at=0, reason="nothing_to_burn", actions_used=0))
 bn.append(case("an object without an ash link still burns", f, ["burn:right"], won=False, failed=False, actions_used=1))
 f = fx("FX_burn_stair", [obj("s", "stair", 12, 1, 1, to=(2, 0, 1)), far_exit()], player=(12, 0, 1))
 bn.append(case("a non-flammable object cannot be burned", f, ["burn:right"], rejected_at=0, reason="not_flammable", actions_used=0))
@@ -154,10 +154,10 @@ f = fx("FX_shadow_room", [obj("cr", "crate", 12, 1, 1), obj("s", "stair", 12, 2,
        shadows=[("sh", 2, 2, 1)], apH=1)
 sh.append(case("a shadow in another room is not destroyed", f, ["burn:down", W, R, "interact", R],
                rejected_at=4, reason="shadow_blocks", actions_used=4))
-f = fx("FX_wake_self", [obj("ex", "exit", 10, 4, 2)], player=(12, 0, 1), shadows=[("sh", 12, 0, 1)], apH=1)
-sh.append(case("waiting while a shadow would wake on you is rejected and free", f, [W],
-               rejected_at=0, reason="shadow_wakes_on_you", actions_used=0))
-sh.append(case("moving away from a waking shadow is fine", f, [R], won=False, failed=False, actions_used=1))
+f = fx("FX_wake_self", [obj("ex", "exit", 10, 4, 2)], player=(12, 0, 1), shadows=[("sh", 12, 1, 1)], apH=2)
+sh.append(case("a dormant shadow can be stood on; waiting as its hour passes is rejected and free", f, [R, W],
+               rejected_at=1, reason="shadow_wakes_on_you", actions_used=1))
+sh.append(case("moving off the shadow's tile lets it wake harmlessly", f, [R, R], won=False, failed=False, actions_used=2))
 f = fx("FX_wake_move", [obj("ex", "exit", 10, 4, 2)], player=(12, 0, 1), shadows=[("sh", 12, 1, 1)], apH=1)
 sh.append(case("moving onto a tile where a shadow wakes is rejected and free", f, [R],
                rejected_at=0, reason="shadow_wakes_on_you", actions_used=0))

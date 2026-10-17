@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from .model import (
-    ASH, CHASM, DIRS, FAILED, HOURS, INTACT, NUM_HOURS, PLAYING, TYPES, WALL, WON,
+    ASH, CHASM, DIRS, FAILED, GONE, HOURS, INTACT, NUM_HOURS, PLAYING, TYPES, WALL, WON,
     GameObject, GameState, Shadow,
 )
 
@@ -27,8 +27,9 @@ ACTION_ORDER = (
 
 # ---------------------------------------------------------------- queries
 def object_at(state: GameState, hour: int, x: int, y: int) -> Optional[GameObject]:
+    """The object in a slot. GONE counts as an empty slot (section 11 item 7)."""
     for o in state.objects:
-        if o.hour == hour and o.x == x and o.y == y:
+        if o.hour == hour and o.x == x and o.y == y and o.state != GONE:
             return o
     return None
 
@@ -47,13 +48,13 @@ def tile_block_reason(state: GameState, hour: int, x: int, y: int) -> Optional[s
         return "out_of_bounds"
     terrain = lv.terrain_at(hour, x, y)
     if terrain == WALL:
-        return "wall"
+        return "blocked_terrain"
     obj = object_at(state, hour, x, y)
     td = TYPES[obj.type] if obj else None
-    if obj and obj.state in td.blocks:
-        return "blocked"
     if terrain == CHASM and not (obj and obj.state in td.fills):
-        return "chasm"
+        return "blocked_terrain"
+    if obj and obj.state in td.blocks:
+        return "blocked_object"
     if active_shadow_at(state, hour, x, y):
         return "shadow_blocks"
     return None
@@ -103,17 +104,18 @@ def apply_action(state: GameState, action: Action) -> Dict[str, object]:
                 and (s.hour, s.x, s.y) == new.player):
             return reject("shadow_wakes_on_you")
 
-    events.append({"type": "action_applied", "actions_used": new.action_count})
+    # Event order (section 11 item 14): the action's own events, sun_advanced, hour_passed,
+    # shadow_appeared (sorted by id), then action_applied, then level_won / level_failed.
     if new_sun != old_sun:
         events.append({"type": "sun_advanced", "from_index": old_sun, "to_index": new_sun})
     for hour in newly_hours:
         events.append({"type": "hour_passed", "hour": hour})
-        for s in new.level.shadows:
-            if s.hour == hour and s.id not in new.destroyed:
-                events.append({"type": "shadow_appeared", "id": s.id, "hour": s.hour,
-                               "slot": [s.x, s.y]})
+    for s in sorted((s for s in new.level.shadows
+                     if s.hour in newly_hours and s.id not in new.destroyed), key=lambda s: s.id):
+        events.append({"type": "shadow_appeared", "id": s.id, "hour": s.hour, "slot": [s.x, s.y]})
+    events.append({"type": "action_applied", "actions_used": new.action_count})
 
-    # Order of checks: (1) exit -> win, (2) otherwise dial complete -> fail.
+    # Terminal events come after action_applied. Order of checks: (1) exit -> win, (2) otherwise dial complete -> fail.
     here = object_at(new, *new.player)
     if here is not None and here.type == "exit":
         new.status = WON
@@ -128,7 +130,7 @@ def apply_action(state: GameState, action: Action) -> Dict[str, object]:
 def _move(new: GameState, action: Action, events: List[Event]) -> Optional[str]:
     d = action.get("dir")
     if d not in DIRS:
-        return "bad_direction"
+        return "unknown_action"
     hour, x, y = new.player
     dx, dy = DIRS[d]
     reason = tile_block_reason(new, hour, x + dx, y + dy)
@@ -147,7 +149,7 @@ def _interact(new: GameState, events: List[Event]) -> Optional[str]:
         return "not_on_stair"
     to = obj.links_to
     if tile_block_reason(new, to.hour, to.x, to.y):
-        return "stair_blocked"
+        return "arrival_blocked"
     events.append({"type": "moved", "from_hour": hour, "from_slot": [x, y],
                    "to_hour": to.hour, "to_slot": [to.x, to.y]})
     new.player = (to.hour, to.x, to.y)
@@ -157,16 +159,14 @@ def _interact(new: GameState, events: List[Event]) -> Optional[str]:
 def _burn(new: GameState, action: Action, events: List[Event]) -> Optional[str]:
     d = action.get("dir")
     if d not in DIRS:
-        return "bad_direction"
+        return "unknown_action"
     lv = new.level
     hour, x, y = new.player
     dx, dy = DIRS[d]
     tx, ty = x + dx, y + dy
-    if not lv.in_bounds(tx, ty):
-        return "out_of_bounds"
-    obj = object_at(new, hour, tx, ty)
+    obj = object_at(new, hour, tx, ty) if lv.in_bounds(tx, ty) else None
     if obj is None:
-        return "nothing_to_burn"
+        return "nothing_to_burn"  # also covers burning off the grid
     if obj.state != INTACT:
         return "not_intact"
     if not obj.flammable:
@@ -185,17 +185,17 @@ def _burn(new: GameState, action: Action, events: List[Event]) -> Optional[str]:
     # 2. its ash link creates a new INTACT object elsewhere (fixed data, never random)
     if link is not None:
         new.objects.append(GameObject(
-            id=f"{obj.id}>ash", type=link.becomes, hour=link.hour, x=link.x, y=link.y,
+            id=f"{obj.id}_ash", type=link.becomes, hour=link.hour, x=link.x, y=link.y,
             state=INTACT, flammable=TYPES[link.becomes].flammable))
         events.append({"type": "ash_moved", "from_hour": hour, "to_hour": link.hour,
                        "to_slot": [link.x, link.y], "becomes": link.becomes})
     # 3. every ACTIVE shadow in the same room, in the 4-neighborhood of the burned slot, dies
     dead = set(new.destroyed)
-    for s in lv.shadows:
-        if (s.hour == hour and abs(s.x - tx) + abs(s.y - ty) == 1
-                and new.shadow_active(s)):
-            dead.add(s.id)
-            events.append({"type": "shadow_destroyed", "id": s.id, "hour": s.hour})
+    for ox, oy in ((0, -1), (0, 1), (-1, 0), (1, 0)):  # up, down, left, right
+        for s in lv.shadows:
+            if (s.hour, s.x, s.y) == (hour, tx + ox, ty + oy) and new.shadow_active(s):
+                dead.add(s.id)
+                events.append({"type": "shadow_destroyed", "id": s.id, "hour": s.hour})
     new.destroyed = frozenset(dead)
     return None
 

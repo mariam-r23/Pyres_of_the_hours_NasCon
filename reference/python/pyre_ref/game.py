@@ -52,9 +52,12 @@ class Game:
         return result
 
     def undo(self) -> Dict[str, object]:
-        had = self.history.can_undo
+        """Always allowed, even out of a won or failed state. Emits only undo_done (no action_applied)."""
+        if not self.history.can_undo:
+            return {"ok": False, "reason": "nothing_to_undo", "state": self.state,
+                    "events": [{"type": "action_rejected", "reason": "nothing_to_undo"}]}
         self.history.undo()
-        return {"ok": had, "events": [{"type": "undo_done"}] if had else [], "state": self.state}
+        return {"ok": True, "reason": "", "events": [{"type": "undo_done"}], "state": self.state}
 
     def restart(self) -> GameState:
         return self.history.reset()
