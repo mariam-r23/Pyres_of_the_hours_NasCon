@@ -183,10 +183,13 @@ func test_empty_pick_says_nothing_and_ignores_level_spirit_lines() -> bool:
 	check_eq(result["source"], "none", "nothing fits")
 	check_eq(result["text"], "", "no text")
 	check_eq(env["said"], [], "an empty pick says nothing")
-	# L01's own spirit_lines (on_burn, on_solve) are not used either.
+	_free(env)
+	# A level's spirit_lines for a trigger that has lines are not used either.
+	meta["spirit_lines"] = {"on_burn": "A per-level burn line that must not be used."}
+	env = _setup("L01_first_crate", meta)
 	_action(env, [BURNED])
 	check_eq(env["said"].size(), 1, "on_burn is said")
-	check(env["said"][0][2] != _l01_meta()["spirit_lines"]["on_burn"], "from lines.json, not the level file")
+	check(env["said"][0][2] != meta["spirit_lines"]["on_burn"], "from lines.json, not the level file")
 	_free(env)
 	return true
 
@@ -278,4 +281,17 @@ func test_hud_changed_after_undo() -> bool:
 	}, "hud after undo")
 	main.get_parent().remove_child(main)
 	main.free()
+	return true
+
+
+func test_mood_tag_is_the_lines_own_mood_on_a_tier_1_pick() -> bool:
+	# on_ending_burn has only triumphant lines; a menacing-only act 3 level
+	# makes the picker choose menacing and fall back to tier 1.
+	var env := _setup(DirectorScript.ENDING_LEVEL_ID, {"act": 3, "spirit_mood": "menacing", "mood_weights": {"menacing": 1.0}})
+	var result: Dictionary = env["director"].say("on_ending_burn")
+	check_eq(result["tier"], 1, "a tier 1 pick")
+	check_eq(result["mood"], "menacing", "the picker chose menacing")
+	check_eq(result["line_mood"], "triumphant", "the line was written triumphant")
+	check_eq(env["said"][0][1], "triumphant", "spirit_said carries the line's own mood")
+	_free(env)
 	return true

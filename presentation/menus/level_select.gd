@@ -15,7 +15,9 @@ signal chosen(action: String, level_id: String)
 var rows: Array = []
 
 
-## One row per level: {id, path, title, unlocked, best, par, text}.
+## One row per level: {id, path, title, unlocked, best, par, left, right, text}.
+## left is "number  title", right is best / par (or "locked"); the button
+## shows right in a right-aligned column. text is both, for logs and tests.
 static func build_rows(entries: Array, progress: Dictionary) -> Array:
 	var out: Array = []
 	for i in entries.size():
@@ -28,6 +30,8 @@ static func build_rows(entries: Array, progress: Dictionary) -> Array:
 		out.append({
 			"id": entry["id"], "path": entry["path"], "title": title,
 			"unlocked": unlocked, "best": best, "par": par,
+			"left": "%d   %s" % [i + 1, title],
+			"right": best_par_text(best, par) if unlocked else "locked",
 			"text": row_text(i + 1, title, unlocked, best, par),
 		})
 	return out
@@ -62,10 +66,22 @@ func _ready() -> void:
 	scroll.add_child(list)
 	var first: Button = null
 	for row in rows:
-		var b := Style.button(row["text"], scale)
+		var b := Style.button(row["left"], scale)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.disabled = not row["unlocked"]
+		# best / par in a straight right-hand column, inside the button.
+		var right := Label.new()
+		right.text = row["right"]
+		right.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+		right.offset_left = -200 * scale
+		right.offset_right = -18 * scale
+		right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		right.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		right.add_theme_font_size_override("font_size", int(Style.BUTTON_SIZE * scale))
+		right.add_theme_color_override("font_color", Style.TEXT if row["unlocked"] else Style.TEXT_DISABLED)
+		b.add_child(right)
 		if row["unlocked"]:
 			var id: String = row["id"]
 			b.pressed.connect(func(): chosen.emit("start", id))

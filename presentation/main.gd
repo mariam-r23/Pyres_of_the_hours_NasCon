@@ -61,6 +61,19 @@ const FEEDBACK_FADE := 0.5
 ## The HUD (status, hint, controls) fades out during the ripple shot.
 const HUD_FADE_TIME := 0.15
 
+## HUD font sizes, offsets and outlines at 720p; apply_hud_scale() multiplies
+## them by the window scale (like the menus) so the HUD reads at 1080p too.
+const HUD_LAYOUT := {
+	"message": {"font": 28, "outline": 8},
+	"hint": {"font": 14, "offset_left": 16, "offset_bottom": -12},
+	"speech_mood": {"font": 13, "offset_top": 14},
+	"speech": {"font": 22, "offset_left": -540, "offset_right": 540, "offset_top": 32, "outline": 6},
+	"status": {"font": 15, "offset_left": 16, "offset_top": 12},
+	"context": {"font": 17, "offset_left": 16, "offset_top": 112},
+	"feedback": {"font": 20, "offset_bottom": -64, "outline": 6},
+	"return_button": {"font": 22, "offset_top": -150, "offset_bottom": -110},
+}
+
 ## Spirit speech placeholder (ui/ can replace it by listening to spirit_said):
 ## stays SPEECH_MIN_TIME s, longer for long lines, then fades.
 const SPEECH_MIN_TIME := 3.5
@@ -124,6 +137,8 @@ var _open_menu: Control = null
 var _return_button: Button
 ## True once the ending choice was made: Enter returns to the main menu.
 var _ending_done := false
+## The HUD's current font scale (see apply_hud_scale).
+var hud_scale := 1.0
 ## True when the next redraw should tween passed-hour grades (an hour passed).
 var _animate_grades := false
 
@@ -707,10 +722,7 @@ func _build_ui() -> void:
 
 	# After the ending: a clickable way back too (Enter also works).
 	_return_button = MenuStyle.button("Return to main menu", 1.0)
-	_return_button.theme = MenuStyle.theme(1.0)
 	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_return_button.offset_top = -150
-	_return_button.offset_bottom = -110
 	_return_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_return_button.visible = false
 	_return_button.pressed.connect(show_main_menu)
@@ -722,19 +734,14 @@ func _build_ui() -> void:
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_message.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_message.add_theme_constant_override("outline_size", 8)
 	_message.add_theme_color_override("font_outline_color", BACKGROUND)
-	_message.add_theme_font_size_override("font_size", 28)
 	_message.add_theme_color_override("font_color", RoomViewScript.COLORS["sun_marker"])
 	_message.visible = false
 	layer.add_child(_message)
 
 	_hint = Label.new()
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_hint.offset_left = 16
-	_hint.offset_bottom = -12
 	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_hint.add_theme_font_size_override("font_size", 14)
 	_hint.add_theme_color_override("font_color", TEXT_COLOR)
 	_hint.text = CONTROLS_TEXT
 	layer.add_child(_hint)
@@ -742,41 +749,28 @@ func _build_ui() -> void:
 	# Spirit speech (placeholder): a small mood tag over the line, top center.
 	_speech_mood = Label.new()
 	_speech_mood.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_speech_mood.offset_top = 14
 	_speech_mood.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_speech_mood.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_speech_mood.add_theme_font_size_override("font_size", 13)
 	_speech_mood.add_theme_color_override("font_color", TEXT_COLOR)
 	_speech_mood.visible = false
 	layer.add_child(_speech_mood)
 	_speech = Label.new()
 	_speech.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_speech.offset_left = -540
-	_speech.offset_right = 540
-	_speech.offset_top = 32
 	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_speech.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_speech.add_theme_font_size_override("font_size", 22)
 	_speech.add_theme_color_override("font_color", HINT_COLOR)
-	_speech.add_theme_constant_override("outline_size", 6)
 	_speech.add_theme_color_override("font_outline_color", BACKGROUND)
 	_speech.visible = false
 	layer.add_child(_speech)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_status.offset_left = 16
-	_status.offset_top = 12
-	_status.add_theme_font_size_override("font_size", 15)
 	_status.add_theme_color_override("font_color", TEXT_COLOR)
 	layer.add_child(_status)
 
 	# Just under the four status lines.
 	_context = Label.new()
 	_context.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_context.offset_left = 16
-	_context.offset_top = 112
-	_context.add_theme_font_size_override("font_size", 17)
 	_context.add_theme_color_override("font_color", HINT_COLOR)
 	_context.visible = false
 	layer.add_child(_context)
@@ -784,13 +778,38 @@ func _build_ui() -> void:
 	# Bottom center, above the controls text.
 	_feedback = Label.new()
 	_feedback.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_feedback.offset_bottom = -64
 	_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_feedback.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_feedback.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_feedback.add_theme_font_size_override("font_size", 20)
 	_feedback.add_theme_color_override("font_color", HINT_COLOR)
-	_feedback.add_theme_constant_override("outline_size", 6)
 	_feedback.add_theme_color_override("font_outline_color", BACKGROUND)
 	_feedback.visible = false
 	layer.add_child(_feedback)
+
+	_on_viewport_resized()
+	get_viewport().size_changed.connect(_on_viewport_resized)
+
+
+func _on_viewport_resized() -> void:
+	apply_hud_scale(MenuStyle.scale_for(get_viewport().get_visible_rect().size.y))
+
+
+## Sets every HUD font size, offset and outline from HUD_LAYOUT at `scale`
+## (1.0 at 720p, 1.5 at 1080p, the same factor the menus use).
+func apply_hud_scale(scale: float) -> void:
+	hud_scale = scale
+	var nodes := {
+		"message": _message, "hint": _hint, "speech_mood": _speech_mood, "speech": _speech,
+		"status": _status, "context": _context, "feedback": _feedback, "return_button": _return_button,
+	}
+	for key in HUD_LAYOUT:
+		var node: Control = nodes[key]
+		var spec: Dictionary = HUD_LAYOUT[key]
+		node.add_theme_font_size_override("font_size", int(spec["font"] * scale))
+		for side in ["offset_left", "offset_right", "offset_top", "offset_bottom"]:
+			if spec.has(side):
+				node.set(side, spec[side] * scale)
+		if spec.has("outline"):
+			node.add_theme_constant_override("outline_size", int(spec["outline"] * scale))
+	_return_button.theme = MenuStyle.theme(scale)
+	_return_button.custom_minimum_size = Vector2(320, 0) * scale

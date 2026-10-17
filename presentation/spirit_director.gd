@@ -45,8 +45,10 @@ const REVEAL_LEVEL_ID := "L09_the_fuel"
 ## with no fitting line says nothing.
 
 ## Every decision, for diagnostics and tests:
-## {trigger, mood, text, tier, repeated, source} with source "lines" (a line
-## from lines.json) or "none" (nothing fits, nothing is said).
+## {trigger, mood, line_mood, text, tier, repeated, source}: mood is the
+## picker's chosen mood, line_mood the mood the line was written in (they
+## differ on tier 1 / 3 picks). source is "lines" (a line from lines.json)
+## or "none" (nothing fits, nothing is said).
 signal line_picked(result: Dictionary)
 
 var bus: Node = null
@@ -168,10 +170,11 @@ func say(trigger: String) -> Dictionary:
 	if picker == null:
 		return {}
 	var r: Dictionary = picker.say(trigger, ctx)
-	var result := {"trigger": trigger, "mood": r["mood"], "text": "", "tier": r["tier"],
-		"repeated": r["repeated"], "source": "none"}
+	var result := {"trigger": trigger, "mood": r["mood"], "line_mood": "", "text": "",
+		"tier": r["tier"], "repeated": r["repeated"], "source": "none"}
 	if not (r["line"] as Dictionary).is_empty():
 		result["text"] = str(r["line"]["text"])
+		result["line_mood"] = str(r["line"].get("mood", r["mood"]))
 		result["source"] = "lines"
 	line_picked.emit(result)
 	if result["text"] != "":
@@ -184,7 +187,8 @@ func say(trigger: String) -> Dictionary:
 
 func _deliver(result: Dictionary) -> void:
 	if bus != null:
-		bus.spirit_said.emit(result["trigger"], result["mood"], result["text"])
+		# The line's own mood, so the tag always matches how the line reads.
+		bus.spirit_said.emit(result["trigger"], result["line_mood"], result["text"])
 
 
 func _on_ripple_finished() -> void:
