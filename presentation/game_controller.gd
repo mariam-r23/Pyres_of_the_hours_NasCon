@@ -31,6 +31,9 @@ var bus = null
 ## The current play-through, or null before the first successful load.
 var session: GameSession = null
 var burn_mode := false
+## Optional object with is_playing() (the ripple camera). While it plays,
+## keys apply no actions.
+var blocker: Object = null
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -93,6 +96,8 @@ func current_state():
 ## Handles one key press. Returns the perform/undo result, {} for a key that
 ## only changed burn mode or restarted, or null for a key we do not use.
 func handle_key(keycode: Key) -> Variant:
+	if blocker != null and blocker.is_playing():
+		return {}
 	match keycode:
 		KEY_B:
 			_set_burn_mode(not burn_mode)

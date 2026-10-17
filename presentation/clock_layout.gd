@@ -11,6 +11,7 @@ const RoomViewScript := preload("res://presentation/room_view.gd")
 ## apart (chord = 2 R sin 30 deg). 9 units leaves a 4-unit gap between 5x5 rooms.
 const RADIUS := 9.0
 const HAND_LENGTH := 3.2
+const HAND_TIP_LENGTH := 0.7
 
 var _rooms := {}  # hour -> RoomView
 var _hand_pivot: Node3D = null
@@ -50,10 +51,25 @@ func room_for_hour(hour: int) -> Node3D:
 	return _rooms.get(hour)
 
 
+## Pops in the object on `slot` in the room for `hour`.
+func pop_slot(hour: int, slot: Vector2i) -> void:
+	var room := room_for_hour(hour)
+	if room != null:
+		room.pop_slot(slot)
+
+
+## Unit vector (XZ plane) the dial hand points along, in this node's space.
+func hand_direction() -> Vector3:
+	if _hand_pivot == null:
+		return Vector3.ZERO
+	return (_hand_pivot.transform.basis * Vector3(0, 0, -1)).normalized()
+
+
 ## Redraws every room and points the dial hand at the sun hour.
-func refresh_all(state: GameStateScript) -> void:
+## `hidden` maps hour -> Array of slots whose objects are not drawn yet.
+func refresh_all(state: GameStateScript, hidden: Dictionary = {}) -> void:
 	for hour in _rooms:
-		_rooms[hour].refresh(state, hour)
+		_rooms[hour].refresh(state, hour, hidden.get(hour, []))
 	if _hand_pivot != null:
 		# rotation.y turns -Z toward -X for positive angles, so negate for clockwise.
 		_hand_pivot.rotation.y = -hour_angle(sun_hour(state))
@@ -89,3 +105,23 @@ func _build_dial() -> void:
 	hand.material_override = hand_mat
 	hand.position = Vector3(0, 0, -HAND_LENGTH / 2.0)  # extends from the hub toward -Z
 	_hand_pivot.add_child(hand)
+	# An arrowhead at the far end and a pale cap on the hub, so it is always
+	# clear which end of the hand points at the sun hour.
+	var tip := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.32
+	cone.height = HAND_TIP_LENGTH
+	tip.mesh = cone
+	tip.material_override = hand_mat
+	tip.rotation_degrees = Vector3(-90, 0, 0)  # the cone's point turns toward -Z
+	tip.position = Vector3(0, 0, -HAND_LENGTH - HAND_TIP_LENGTH / 2.0)
+	_hand_pivot.add_child(tip)
+	var cap := MeshInstance3D.new()
+	var cap_disc := CylinderMesh.new()
+	cap_disc.top_radius = 0.28
+	cap_disc.bottom_radius = 0.28
+	cap_disc.height = 0.1
+	cap.mesh = cap_disc
+	cap.material_override = hand_mat
+	_hand_pivot.add_child(cap)

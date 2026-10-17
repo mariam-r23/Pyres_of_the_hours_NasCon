@@ -87,7 +87,7 @@ func test_only_fire_is_saturated_orange() -> bool:
 	check(colors.has("fire"), "fire color exists")
 	check(_is_saturated_orange(colors["fire"]), "fire IS saturated orange")
 	for key in colors:
-		if key != "fire":
+		if not key.begins_with("fire"):  # fire effects may be saturated orange
 			check(not _is_saturated_orange(colors[key]), "%s must not be saturated orange (%s)" % [key, colors[key]])
 	return true
 
@@ -100,8 +100,14 @@ func test_object_style_covers_every_type_and_state() -> bool:
 			check(style.has("emission"), "%s %s says whether it glows" % [type, state])
 			if style["emission"] != null:
 				check(not _is_saturated_orange(style["emission"]), "%s %s glow is not saturated orange" % [type, state])
-		check(RoomViewScript.object_style(type, GS.ASH)["emission"] != null, "ASH %s glows (ember)" % type)
-	check(RoomViewScript.object_style("ash_path", GS.INTACT)["emission"] != null, "ash_path is gameplay ash and glows")
+		check_eq(RoomViewScript.object_style(type, GS.ASH)["detail"], "specks", "ASH %s shows ember specks" % type)
+		check(RoomViewScript.object_style(type, GS.ASH)["color"] != RoomViewScript.COLORS["floor"], "ASH %s differs from the floor" % type)
+	check_eq(RoomViewScript.object_style("ash_path", GS.INTACT)["detail"], "cracks", "ash_path has glowing cracks")
+	var ash_path: Color = RoomViewScript.object_style("ash_path", GS.INTACT)["color"]
+	var crate: Color = RoomViewScript.object_style("crate", GS.INTACT)["color"]
+	check(ash_path.s < 0.1, "ash_path is grey, not red/brown (saturation %.2f)" % ash_path.s)
+	check(absf(ash_path.v - RoomViewScript.COLORS["floor"].v) > 0.15, "ash_path stands out from the floor")
+	check(not ash_path.is_equal_approx(crate), "ash_path differs from the crate color")
 	check(RoomViewScript.object_style("crate", GS.INTACT)["emission"] == null, "an INTACT crate does not glow")
 	return true
 
@@ -109,4 +115,26 @@ func test_object_style_covers_every_type_and_state() -> bool:
 func test_main_script_parses() -> bool:
 	var script: GDScript = load("res://presentation/main.gd")
 	check(script != null and script.can_instantiate(), "main.gd loads")
+	return true
+
+
+func test_dial_hand_points_at_the_sun_hour() -> bool:
+	var clock: Node3D = ClockLayoutScript.new()
+	Engine.get_main_loop().root.add_child(clock)  # _ready builds the dial
+	var s: GS = GS.new()
+	s.actions_per_hour = 1
+	for index in 6:
+		s.action_count = index
+		clock.refresh_all(s)
+		var hour: int = ClockLayoutScript.sun_hour(s)
+		var expected := ClockLayoutScript.hour_to_room_position(hour).normalized()
+		var dir: Vector3 = clock.hand_direction()
+		check(dir.is_equal_approx(expected), "sun_index %d: hand points at %d o'clock (got %s, want %s)" % [index, hour, dir, expected])
+	# The playtest case: sun_index 1 must point up-right (2 o'clock), never down (6).
+	s.action_count = 1
+	clock.refresh_all(s)
+	var two: Vector3 = clock.hand_direction()
+	check(two.x > 0.5 and two.z < 0.0, "sun_index 1 points up-right toward 2 o'clock (%s)" % two)
+	clock.get_parent().remove_child(clock)
+	clock.free()
 	return true

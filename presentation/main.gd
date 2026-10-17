@@ -9,6 +9,7 @@ const ClockLayoutScript := preload("res://presentation/clock_layout.gd")
 const EventBusScript := preload("res://presentation/event_bus.gd")
 const RoomViewScript := preload("res://presentation/room_view.gd")
 const LevelList := preload("res://presentation/level_list.gd")
+const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
 const Sun := preload("res://core/sun.gd")
 
 const WON_NEXT_TEXT := "You reached the exit.\nPress N for the next level, R to restart."
@@ -40,6 +41,8 @@ const REJECTION_MESSAGES := {
 ## Seconds the rejection line stays fully visible, then fades.
 const FEEDBACK_HOLD := 1.0
 const FEEDBACK_FADE := 0.5
+## The HUD (status, hint, controls) fades out during the ripple shot.
+const HUD_FADE_TIME := 0.15
 
 ## Cold, dark world (see room_view.gd COLORS for the color rule).
 const BACKGROUND := Color(0.035, 0.045, 0.065)
@@ -52,6 +55,7 @@ const HINT_COLOR := Color(0.80, 0.88, 0.96)
 var controller: Node
 var clock: Node3D
 var bus: Node
+var ripple: Node3D
 ## Id of the level being played ("" before the first load) and its meta.
 var level_id := ""
 var level_meta := {}
@@ -61,7 +65,10 @@ var _status: Label
 var _context: Label
 var _feedback: Label
 var _feedback_tween: Tween
+var _hud_tween: Tween
 var _refresh_queued := false
+## [hour, slot] pairs the ripple camera revealed; popped after the next redraw.
+var _pending_pops: Array = []
 
 
 func _ready() -> void:
@@ -80,7 +87,21 @@ func _ready() -> void:
 		add_child(bus)
 	controller.bus = bus
 
+	# The ripple camera owns the game camera and plays the burn -> ash shot.
+	ripple = RippleCameraScript.new()
+	ripple.name = "RippleCamera"
+	ripple.bus = bus
+	add_child(ripple)
+	controller.blocker = ripple
+	for type in ["undo_done", "level_loaded"]:
+		bus.connect(type, func(_arg): ripple.cancel())
+	bus.level_restarted.connect(ripple.cancel)
+	ripple.hidden_slots_changed.connect(_queue_refresh)
+	ripple.slot_revealed.connect(_on_slot_revealed)
+
 	_build_ui()
+	ripple.ripple_started.connect(func(): fade_hud(0.0, HUD_FADE_TIME))
+	ripple.ripple_finished.connect(_on_ripple_finished)
 	# Every event of one action lands in the same frame; redraw once after them.
 	for type in ["action_applied", "action_rejected", "undo_done", "shadow_appeared",
 			"shadow_destroyed", "level_won", "level_failed"]:
@@ -124,6 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Loads a {id, path} level. On failure the error is shown and the current
 ## level keeps playing. Returns the error list ([] on success).
 func load_entry(entry: Dictionary) -> Array:
+	ripple.cancel()
 	var previous_id := level_id
 	level_id = entry["id"]
 	var errors: Array = controller.load_level(entry["path"])
@@ -201,7 +223,14 @@ func _refresh() -> void:
 	var state = controller.current_state()
 	if state == null:
 		return
-	clock.refresh_all(state)
+	# The hidden set is read here, at draw time, so a redraw during the shot
+	# can never show the arriving ash object early.
+	clock.refresh_all(state, ripple.hidden_slots())
+	for pop in _pending_pops:
+		if not ripple.is_slot_hidden(pop[0], pop[1]):
+			clock.pop_slot(pop[0], pop[1])
+	_pending_pops = []
+	ripple.grid_size = Vector2i(state.grid_w, state.grid_h)
 	_show_message(end_message(state.status, LevelList.next_of(level_id) != null))
 	_status.text = status_text(level_meta, level_id, state)
 	_update_context_hint()
@@ -218,6 +247,35 @@ func show_feedback(text: String) -> void:
 	_feedback_tween.tween_interval(FEEDBACK_HOLD)
 	_feedback_tween.tween_property(_feedback, "modulate:a", 0.0, FEEDBACK_FADE)
 	_feedback_tween.tween_callback(func(): _feedback.visible = false)
+
+
+func _on_slot_revealed(hour: int, slot: Vector2i) -> void:
+	_pending_pops.append([hour, slot])
+	_queue_refresh()
+
+
+## Fades back in after a finished shot; skip or cancel restore at once.
+func _on_ripple_finished() -> void:
+	if ripple.last_stop_reason == RippleCameraScript.STOP_FINISHED:
+		fade_hud(1.0, HUD_FADE_TIME)
+	else:
+		fade_hud(1.0, 0.0)
+
+
+## Fades the status label, context hint and controls text (not the
+## rejection feedback) to `alpha` over `seconds` (0 = at once).
+func fade_hud(alpha: float, seconds: float) -> void:
+	if _hud_tween != null:
+		_hud_tween.kill()
+		_hud_tween = null
+	var labels := [_status, _context, _hint]
+	if seconds <= 0.0 or not is_inside_tree():
+		for label in labels:
+			label.modulate.a = alpha
+		return
+	_hud_tween = create_tween().set_parallel(true)
+	for label in labels:
+		_hud_tween.tween_property(label, "modulate:a", alpha, seconds)
 
 
 func hide_feedback() -> void:
@@ -264,14 +322,7 @@ func _build_world() -> void:
 	sun_light.shadow_enabled = true
 	sun_light.rotation_degrees = Vector3(-55, 30, 0)
 	add_child(sun_light)
-
-	# Looks down at the clock from the 6 o'clock side so all six rooms fit.
-	var camera := Camera3D.new()
-	camera.fov = 40.0
-	add_child(camera)
-	camera.position = Vector3(0, 30, 17)
-	camera.look_at(Vector3(0, 0, 1.2))
-	camera.current = true
+	# The camera lives in ripple_camera.gd (overview pose and the ripple shot).
 
 
 func _build_ui() -> void:
