@@ -141,5 +141,47 @@
    "move:right",
    "move:right"
   ]
+ },
+ "L09_the_fuel": {
+  "length": 11,
+  "actions": [
+   "move:up",
+   "move:down",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L10_center_of_the_dial": {
+  "length": 21,
+  "actions": [
+   "move:up",
+   "move:right",
+   "burn:up",
+   "wait",
+   "burn:down",
+   "move:down",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:up",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
  }
 }

@@ -1,0 +1,105 @@
+{
+  "id": "L09_the_fuel",
+  "title": "The Fuel",
+  "act": 3,
+  "spirit_mood": "menacing",
+  "mood_weights": {
+    "menacing": 0.7,
+    "annoyed": 0.2,
+    "amused": 0.1
+  },
+  "grid": {
+    "w": 5,
+    "h": 3
+  },
+  "sun": {
+    "start_index": 0,
+    "actions_per_hour": 2
+  },
+  "rooms": [
+    {
+      "hour": 12,
+      "terrain": [
+        "..#..",
+        ".....",
+        "..#.."
+      ]
+    },
+    {
+      "hour": 2,
+      "terrain": [
+        "..~..",
+        "..~..",
+        "..~.."
+      ]
+    }
+  ],
+  "player": {
+    "hour": 12,
+    "slot": [
+      0,
+      1
+    ]
+  },
+  "objects": [
+    {
+      "id": "crate_a",
+      "type": "crate",
+      "hour": 12,
+      "slot": [
+        1,
+        1
+      ],
+      "state": "INTACT",
+      "flammable": true,
+      "ash_link": {
+        "hour": 2,
+        "slot": [
+          2,
+          1
+        ],
+        "becomes": "ash_path"
+      }
+    },
+    {
+      "id": "stair_12",
+      "type": "stair",
+      "hour": 12,
+      "slot": [
+        3,
+        1
+      ],
+      "state": "INTACT",
+      "flammable": false,
+      "links_to": {
+        "hour": 2,
+        "slot": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "exit_1",
+      "type": "exit",
+      "hour": 2,
+      "slot": [
+        4,
+        1
+      ],
+      "state": "INTACT",
+      "flammable": false
+    }
+  ],
+  "shadows": [
+    {
+      "id": "sh_1",
+      "hour": 12,
+      "slot": [
+        2,
+        1
+      ]
+    }
+  ],
+  "par_actions": 11
+}
