@@ -22,15 +22,18 @@ const COLORS := {
 	"bridge": Color(0.33, 0.36, 0.40),       # cold weathered planks
 	"ash_path": Color(0.30, 0.30, 0.31),     # gameplay ash, glows (see "ember")
 	"crate": Color(0.56, 0.59, 0.64),
-	"door": Color(0.26, 0.29, 0.34),         # dark steel gate
+	"door": Color(0.28, 0.36, 0.50),         # blue-steel gate (stands out from walls)
 	"stair": Color(0.55, 0.60, 0.66),        # pale cold steel
 	"exit": Color(0.70, 0.82, 0.90),         # pale cold light
 	"exit_glow": Color(0.35, 0.50, 0.60),
 	"ash": Color(0.16, 0.16, 0.17),          # burned remains (charcoal)
 	"ember": Color(0.42, 0.14, 0.07),        # dim ember glow on gameplay ash
 	"shadow_body": Color(0.03, 0.03, 0.04),
+	"shadow_body_dormant": Color(0.03, 0.03, 0.04, 0.4),  # see-through: not here yet
 	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange, dimmer than fire
 	"player": Color(0.10, 0.11, 0.13),
+	"player_ring": Color(0.75, 0.85, 0.95),  # pale ring at the player's feet
+	"active_room": Color(0.32, 0.38, 0.48),  # rim under the room the player is in
 	"sun_marker": Color(0.80, 0.86, 0.92),   # cold pale dial hand
 	"dial": Color(0.20, 0.22, 0.26),         # dark steel
 	"fire": Color(1.00, 0.45, 0.05),         # THE warm accent. Only fire.
@@ -38,8 +41,10 @@ const COLORS := {
 
 ## Emission strength for gameplay ash and shadow tips.
 const EMBER_ENERGY := 0.8
-const SHADOW_TIP_DORMANT_ENERGY := 0.25
-const SHADOW_TIP_ACTIVE_ENERGY := 2.0
+const SHADOW_TIP_DORMANT_ENERGY := 0.2
+const SHADOW_TIP_ACTIVE_ENERGY := 2.5
+## Walls are kept low so they do not hide what stands behind them.
+const WALL_HEIGHT := 0.6
 
 const CELL := 1.0
 
@@ -88,6 +93,9 @@ func refresh(state: GameStateScript, hour: int) -> void:
 	_content.name = "Content"
 	add_child(_content)
 
+	if state.player_hour == hour:
+		var rim := Vector3(grid_w + 0.5, 0.05, grid_h + 0.5)
+		_mesh_box(rim, Vector3(0, -0.13, 0), _material(COLORS["active_room"], COLORS["active_room"], 0.4))
 	for y in grid_h:
 		for x in grid_w:
 			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
@@ -104,7 +112,7 @@ func refresh(state: GameStateScript, hour: int) -> void:
 func _draw_terrain(tile: String, slot: Vector2i) -> void:
 	var pos := slot_to_position(slot)
 	if tile == GameStateScript.WALL:
-		_box(Vector3(0.98, 1.0, 0.98), pos + Vector3(0, 0.5, 0), "wall")
+		_box(Vector3(0.98, WALL_HEIGHT, 0.98), pos + Vector3(0, WALL_HEIGHT / 2.0, 0), "wall")
 	elif tile == GameStateScript.CHASM:
 		_box(Vector3(0.96, 0.1, 0.96), pos + Vector3(0, -0.6, 0), "chasm")
 	else:
@@ -128,7 +136,7 @@ func _draw_object(obj: Dictionary) -> void:
 			size = Vector3(0.7, 0.7, 0.7) if not burned else Vector3(0.75, 0.15, 0.75)
 			lift = size.y / 2.0
 		"door":
-			size = Vector3(0.9, 1.0, 0.18) if not burned else Vector3(0.9, 0.1, 0.18)
+			size = Vector3(0.9, 0.8, 0.18) if not burned else Vector3(0.9, 0.1, 0.18)
 			lift = size.y / 2.0
 		"stair":
 			size = Vector3(0.8, 0.3, 0.8)
@@ -148,10 +156,11 @@ func _draw_shadow(slot: Vector2i, active: bool) -> void:
 	var body := CapsuleMesh.new()
 	body.radius = 0.22
 	body.height = 0.85
-	_mesh(body, pos + Vector3(0, 0.43, 0), _material(COLORS["shadow_body"], null, 0.0))
+	var body_color: Color = COLORS["shadow_body"] if active else COLORS["shadow_body_dormant"]
+	_mesh(body, pos + Vector3(0, 0.43, 0), _material(body_color, null, 0.0))
 	var tip := SphereMesh.new()
-	tip.radius = 0.08
-	tip.height = 0.16
+	tip.radius = 0.1 if active else 0.07
+	tip.height = tip.radius * 2.0
 	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
 	_mesh(tip, pos + Vector3(0, 0.9, 0), _material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy))
 
@@ -161,6 +170,10 @@ func _draw_player(slot: Vector2i) -> void:
 	capsule.radius = 0.25
 	capsule.height = 0.9
 	_mesh(capsule, slot_to_position(slot) + Vector3(0, 0.45, 0), _material(COLORS["player"], null, 0.0))
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.3
+	ring.outer_radius = 0.4
+	_mesh(ring, slot_to_position(slot) + Vector3(0, 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8))
 
 
 func _box(size: Vector3, pos: Vector3, color_key: String) -> void:
@@ -188,6 +201,8 @@ func _material(color: Color, emission: Variant, energy: float) -> StandardMateri
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = color
 		mat.roughness = 0.9
+		if color.a < 1.0:
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		if emission != null:
 			mat.emission_enabled = true
 			mat.emission = emission
