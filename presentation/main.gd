@@ -189,6 +189,11 @@ func _ready() -> void:
 	add_child(flash)
 	ripple.flight_started.connect(flash.launch)
 	ripple.ripple_finished.connect(flash.finish)
+	# She flies as the level's mood; undo, restart and a load leave nothing of her behind.
+	bus.level_loaded.connect(func(meta): flash.set_mood(str(meta.get("spirit_mood", "amused"))))
+	for signal_name in ["undo_done", "level_loaded"]:
+		bus.connect(signal_name, func(_arg): flash.clear())
+	bus.level_restarted.connect(flash.clear)
 
 	# The fire spirit: which trigger speaks when (lines come from dialogue/).
 	director = SpiritDirectorScript.new()
@@ -644,7 +649,7 @@ func _on_ending_chosen(choice: String) -> void:
 ## (its slot from the last redraw) and let it dissipate.
 func _on_shadow_destroyed(event: Dictionary) -> void:
 	var room: Node3D = clock.room_for_hour(event["hour"])
-	var ghost: Node3D = room.add_shadow_ghost(room.last_shadow_slot(event["id"]))
+	var ghost: Node3D = room.add_shadow_ghost(room.last_shadow_slot(event["id"]), event["id"])
 	if ghost != null:
 		fx.push({"kind": "dissipate", "hour": event["hour"], "id": event["id"], "ghost": ghost})
 
@@ -826,14 +831,16 @@ func _build_ui() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
-## The UI is designed for 1920x1080: scale the canvas to the window, keeping aspect.
+## The UI is designed for 1920x1080: scale the canvas to the window.
 func _set_content_scale() -> void:
 	var window := get_window()
 	if window == null:
 		return
 	window.content_scale_size = GameUiScript.DESIGN_SIZE
 	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+	# Expand: the canvas grows to the window's aspect (never below 1920x1080), and
+	# the anchored HUD follows the real edges instead of sitting in letterbox bars.
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 
 
 func _on_next_requested() -> void:

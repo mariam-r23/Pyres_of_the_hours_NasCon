@@ -18,7 +18,7 @@ var actions_to_next := 0
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(280, 280)
+	custom_minimum_size = Vector2(248, 248)
 
 
 ## Angle of an hour marker, clockwise from the top. Hour index 0..5.
@@ -68,7 +68,7 @@ func show_state(new_sun_index: int, new_lit: int, new_ticks_per_hour: int, new_a
 
 func _draw() -> void:
 	var center := size / 2.0
-	var radius := minf(size.x, size.y) / 2.0 - 36.0
+	var radius := minf(size.x, size.y) / 2.0 - 32.0
 	var dim := UiTheme.color("text_dim")
 	var pale := UiTheme.color("text")
 	var dark := UiTheme.color("shadow_dark")
@@ -99,8 +99,9 @@ func _draw() -> void:
 		draw_string(font, p + Vector2(-w.x / 2.0, w.y * 0.28), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
 			pale if (h == current or passed) else dim)
 	# Center: the sun marker and how long until it moves.
-	Icons.draw_glyph(self, "sun", Rect2(center - Vector2(24, 40), Vector2(48, 48)), pale, 2.5)
+	Icons.draw_glyph(self, "sun", Rect2(center - Vector2(20, 34), Vector2(40, 40)), pale, 2.5)
 	var body := UiTheme.font("body")
 	var caption := "dial complete" if current == -1 else "moves on in %d" % actions_to_next
-	var cw := body.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
-	draw_string(body, center + Vector2(-cw.x / 2.0, 44.0), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, dim)
+	# Small and just under the sun, so it stays between the 8 and 4 markers.
+	var cw := body.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 19)
+	draw_string(body, center + Vector2(-cw.x / 2.0, 24.0), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 19, dim)

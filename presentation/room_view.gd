@@ -10,6 +10,8 @@ extends Node3D
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Sun := preload("res://core/sun.gd")
+const PaintedFloor := preload("res://presentation/painted_floor.gd")
+const ShadowFigure := preload("res://presentation/shadow_figure.gd")
 
 ## ALL colors live here so Noor can restyle in one place.
 ## Color rule: the world is cold (slate blue, ash gray). Only fire effects
@@ -18,6 +20,7 @@ const Sun := preload("res://core/sun.gd")
 ## deep red-orange (low brightness), never a bright saturated orange.
 const COLORS := {
 	"floor": Color(0.19, 0.22, 0.27),        # slate
+	"floor_grid": Color(0.78, 0.86, 0.95, 0.2), # faint cold lines over the painted floor
 	"wall": Color(0.36, 0.38, 0.42),         # ash gray stone
 	"chasm": Color(0.04, 0.05, 0.07),        # near-black pit
 	"bridge": Color(0.33, 0.36, 0.40),       # cold weathered planks
@@ -32,10 +35,12 @@ const COLORS := {
 	"burnable_edge": Color(1.00, 0.93, 0.82, 0.55), # faint warm-white edge: "this burns"
 	"ash": Color(0.38, 0.37, 0.37),          # burned remains: light charcoal mound
 	"shadow_body": Color(0.03, 0.03, 0.04),
-	"shadow_body_dormant": Color(0.03, 0.03, 0.04, 0.4),  # see-through: not here yet
-	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange, dimmer than fire
+	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange embers (eyes), dimmer than fire
+	"shadow_rim": Color(0.62, 0.72, 0.88),   # faint cold rim, so a shadow reads on the painted floor
+	"shadow_pool": Color(0.01, 0.01, 0.02),  # the dark smoke pool under a shadow
 	"player": Color(0.10, 0.11, 0.13),
 	"player_ring": Color(0.75, 0.85, 0.95),  # pale ring at the player's feet
+	"player_lantern": Color(1.0, 0.94, 0.84), # pale warm-white light over the player (never a shadow)
 	"active_room": Color(0.32, 0.38, 0.48),  # rim under the room the player is in
 	"sun_marker": Color(0.80, 0.86, 0.92),   # cold pale dial hand
 	"dial": Color(0.20, 0.22, 0.26),         # dark steel
@@ -49,8 +54,6 @@ const COLORS := {
 ## Emission strength for fire details, shadow tips and markers.
 const SPECK_ENERGY := 1.4
 const CRACK_ENERGY := 0.9
-const SHADOW_TIP_DORMANT_ENERGY := 0.2
-const SHADOW_TIP_ACTIVE_ENERGY := 2.5
 const EXIT_GLOW_ENERGY := 1.6
 const MARKER_ENERGY := 1.0
 const BURNABLE_EDGE_ENERGY := 0.6
@@ -80,6 +83,12 @@ const SPECK_SPOTS := [Vector2(0.37, 0.1), Vector2(-0.31, -0.22), Vector2(0.06, 0
 ## so the remains stay visible around the player's feet.
 const RING_RADII := Vector2(0.3, 0.4)
 const RING_RADII_ON_MOUND := Vector2(0.26, 0.31)
+## The player's lantern: a small glowing orb over the head and the light it casts.
+const LANTERN_HEIGHT := 1.15
+const LANTERN_RADIUS := 0.09
+const LANTERN_ENERGY := 3.0
+const LANTERN_LIGHT_ENERGY := 1.2
+const LANTERN_LIGHT_RANGE := 2.2
 ## Ash path cracks: (x, z, angle in degrees, length).
 const CRACKS := [Vector4(-0.12, -0.1, 25, 0.55), Vector4(0.14, 0.12, -40, 0.5), Vector4(0.0, 0.25, 80, 0.3)]
 
@@ -104,8 +113,6 @@ const GRADE := {
 ## Shadow animations.
 const SHADOW_RISE_TIME := 0.3
 const SHADOW_RISE_START := Vector3(0.6, 0.05, 0.6)
-const SHADOW_DISSIPATE_TIME := 0.25
-const SHADOW_DISSIPATE_END := Vector3(0.35, 0.35, 0.35)
 
 var grid_w := GameStateScript.DEFAULT_GRID_SIZE
 var grid_h := GameStateScript.DEFAULT_GRID_SIZE
@@ -126,6 +133,13 @@ var _target_grade := {}
 var _grade_tween: Tween = null
 var _soot_fresh_material: StandardMaterial3D = null
 var _soot_count_before := 0
+## The painted floor (Noor's hour painting): one material per room, graded with it.
+var _floor_material: ShaderMaterial = null
+var _floor_hour := -1
+var _floor_used := true
+var _floor_node: MeshInstance3D = null
+var _grid_node: MeshInstance3D = null
+var _floor_look_shown := {}
 
 
 ## How the sun has treated this room: passed (and how many hours ago:
@@ -252,6 +266,7 @@ func refresh(state: GameStateScript, hour: int, hidden_slots: Array = [],
 	for y in grid_h:
 		for x in grid_w:
 			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
+	_draw_painted_floor(state, hour)
 	for obj in state.objects.values():
 		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE and not hidden_slots.has(obj["slot"]):
 			_draw_object(obj)
@@ -297,6 +312,10 @@ func _blend_grade(from: Dictionary, to: Dictionary, t: float) -> void:
 
 ## Applies brightness / emission to every graded material of this room.
 func _apply_grade(grade: Dictionary) -> void:
+	if _floor_material != null:
+		_floor_look_shown = PaintedFloor.floor_look(grade, _floor_used)
+		_floor_material.set_shader_parameter("brightness", _floor_look_shown["brightness"])
+		_floor_material.set_shader_parameter("saturation", _floor_look_shown["saturation"])
 	for mat in _material_base:
 		if _material_base[mat]["graded"]:
 			_apply_grade_to(mat, grade)
@@ -322,6 +341,47 @@ func _draw_soot(state: GameStateScript, hour: int, count: int) -> void:
 		var at := slot_to_position(spot["slot"]) + Vector3(spot["offset"].x, 0.004, spot["offset"].y)
 		var node := _mesh(quad, at, soot_mat if i < _soot_count_before else _soot_fresh_material)
 		node.rotation_degrees.y = spot["angle"]
+
+
+## The hour's painting on the walkable cells (cover-cropped to the room), and
+## faint grid lines over it when the level uses this room.
+func _draw_painted_floor(state: GameStateScript, hour: int) -> void:
+	if _floor_material == null or _floor_hour != hour:
+		_floor_material = PaintedFloor.new_material(hour)
+		_floor_hour = hour
+	_floor_used = PaintedFloor.room_used(state, hour)
+	_floor_node = null
+	_grid_node = null
+	var tex := PaintedFloor.texture_for(hour)
+	if tex == null:
+		return  # no painting: the plain floor tiles show
+	var grid := Vector2i(grid_w, grid_h)
+	var origin := Vector3(-grid_w * CELL / 2.0, 0.0, -grid_h * CELL / 2.0)
+	var cells := PaintedFloor.painted_cells(state, hour)
+	var floor_mesh := PaintedFloor.floor_mesh(cells, grid, PaintedFloor.cover_uv_rect(tex.get_size(), grid), origin, CELL)
+	if floor_mesh != null:
+		_floor_node = _mesh(floor_mesh, Vector3.ZERO, _floor_material)
+		_floor_node.name = "PaintedFloor"
+	if _floor_used:
+		var lines := PaintedFloor.grid_mesh(PaintedFloor.grid_edges(cells), origin, CELL)
+		if lines != null:
+			_grid_node = _mesh(lines, Vector3.ZERO, PaintedFloor.grid_material(COLORS["floor_grid"]))
+			_grid_node.name = "FloorGrid"
+			_grid_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## The painted floor and its grid from the last refresh (null if none).
+func painted_floor() -> MeshInstance3D:
+	return _floor_node
+
+
+func floor_grid() -> MeshInstance3D:
+	return _grid_node
+
+
+## The painted floor's current {brightness, saturation}.
+func floor_look_shown() -> Dictionary:
+	return _floor_look_shown.duplicate()
 
 
 func _draw_terrain(tile: String, slot: Vector2i) -> void:
@@ -473,37 +533,15 @@ func _draw_cracks(top: Vector3) -> void:
 		node.rotation_degrees.y = crack.z
 
 
-## A shadow under its own pivot at floor level (so it can rise from the floor).
+## A shadow creature (shadow_figure.gd) with its origin on the floor, so the
+## rise animation grows it up out of the floor. Dormant until its hour passes.
 func _draw_shadow(sh: Dictionary, active: bool) -> void:
-	var pivot := Node3D.new()
-	pivot.position = slot_to_position(sh["slot"])
-	_content.add_child(pivot)
-	_shadow_nodes[sh["id"]] = pivot
+	var figure: Node3D = ShadowFigure.new()
+	figure.setup(sh["id"], active, COLORS)
+	figure.position = slot_to_position(sh["slot"])
+	_content.add_child(figure)
+	_shadow_nodes[sh["id"]] = figure
 	_shadow_slots[sh["id"]] = sh["slot"]
-	var body_color: Color = COLORS["shadow_body"] if active else COLORS["shadow_body_dormant"]
-	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
-	_build_shadow_meshes(pivot, active,
-		_material(body_color, null, 0.0, false),
-		_material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy, false))
-
-
-func _build_shadow_meshes(pivot: Node3D, active: bool, body_mat: Material, tip_mat: Material) -> void:
-	var body := CapsuleMesh.new()
-	body.radius = 0.22
-	body.height = 0.85
-	var body_node := MeshInstance3D.new()
-	body_node.mesh = body
-	body_node.material_override = body_mat
-	body_node.position = Vector3(0, 0.43, 0)
-	pivot.add_child(body_node)
-	var tip := SphereMesh.new()
-	tip.radius = 0.1 if active else 0.07
-	tip.height = tip.radius * 2.0
-	var tip_node := MeshInstance3D.new()
-	tip_node.mesh = tip
-	tip_node.material_override = tip_mat
-	tip_node.position = Vector3(0, 0.9, 0)
-	pivot.add_child(tip_node)
 
 
 ## The slot a shadow was drawn on in the last redraw, or (-1, -1).
@@ -525,47 +563,31 @@ func rise_shadow(id: String) -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-## A stand-in for a destroyed shadow, kept until it dissipates (it survives
-## redraws). Returns the node, or null if the slot is unknown.
-func add_shadow_ghost(slot: Vector2i) -> Node3D:
+## A stand-in for a destroyed shadow (the same creature, awake), kept until it
+## dissipates (it survives redraws). Returns the node, or null if the slot is unknown.
+func add_shadow_ghost(slot: Vector2i, id: String = "") -> Node3D:
 	if slot.x < 0:
 		return null
 	if _fx_root == null:
 		_fx_root = Node3D.new()
 		_fx_root.name = "Fx"
 		add_child(_fx_root)
-	var ghost := Node3D.new()
+	var ghost: Node3D = ShadowFigure.new()
+	ghost.setup(id, true, COLORS)
 	ghost.name = "ShadowGhost"
 	ghost.position = slot_to_position(slot)
 	_fx_root.add_child(ghost)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = COLORS["shadow_body"]
-	body_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	var tip_mat := StandardMaterial3D.new()
-	tip_mat.albedo_color = COLORS["shadow_tip"]
-	tip_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	tip_mat.emission_enabled = true
-	tip_mat.emission = COLORS["shadow_tip"]
-	tip_mat.emission_energy_multiplier = SHADOW_TIP_ACTIVE_ENERGY
-	_build_shadow_meshes(ghost, true, body_mat, tip_mat)
 	return ghost
 
 
-## Shrinks and fades a ghost, then frees it.
+## The smoke breaks apart and fades, the eyes go out last, then the ghost frees itself.
 static func dissipate_ghost(ghost: Node3D) -> void:
 	if ghost == null or not is_instance_valid(ghost):
 		return
 	if not ghost.is_inside_tree():
 		ghost.free()
 		return
-	var tween := ghost.create_tween().set_parallel(true)
-	tween.tween_property(ghost, "scale", SHADOW_DISSIPATE_END, SHADOW_DISSIPATE_TIME).set_ease(Tween.EASE_IN)
-	for child in ghost.get_children():
-		var mat: StandardMaterial3D = child.material_override
-		tween.tween_property(mat, "albedo_color:a", 0.0, SHADOW_DISSIPATE_TIME)
-		if mat.emission_enabled:
-			tween.tween_property(mat, "emission_energy_multiplier", 0.0, SHADOW_DISSIPATE_TIME)
-	tween.chain().tween_callback(ghost.queue_free)
+	ghost.start_dissolve()
 
 
 func _draw_player(state: GameStateScript, hour: int) -> void:
@@ -587,6 +609,20 @@ func _draw_player(state: GameStateScript, hour: int) -> void:
 	ring.inner_radius = ring_radii.x
 	ring.outer_radius = ring_radii.y
 	_mesh(ring, slot_to_position(slot) + Vector3(0, floor_y + 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8, false))
+	# A small warm-white lantern over the head, so the player never reads as a shadow.
+	var orb := SphereMesh.new()
+	orb.radius = LANTERN_RADIUS
+	orb.height = LANTERN_RADIUS * 2.0
+	var lantern := _mesh(orb, slot_to_position(slot) + Vector3(0, floor_y + LANTERN_HEIGHT, 0),
+		_material(COLORS["player_lantern"], COLORS["player_lantern"], LANTERN_ENERGY, false))
+	lantern.name = "PlayerLantern"
+	var light := OmniLight3D.new()
+	light.name = "PlayerLight"
+	light.light_color = COLORS["player_lantern"]
+	light.light_energy = LANTERN_LIGHT_ENERGY
+	light.omni_range = LANTERN_LIGHT_RANGE
+	light.position = lantern.position
+	_content.add_child(light)
 
 
 func _box(size: Vector3, pos: Vector3, color_key: String) -> void:

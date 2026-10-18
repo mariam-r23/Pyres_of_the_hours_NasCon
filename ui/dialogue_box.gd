@@ -34,9 +34,9 @@ const FADE_OUT := 0.4
 ## that replace on_solve or follow the ending choice).
 const INTERRUPTING := ["on_solve", "on_fail", "on_choice", "on_reveal", "on_ending_wind", "on_ending_burn"]
 
-## Bottom left, narrow enough to stay clear of the 6 o'clock room and the action bar.
-const BOX_SIZE := Vector2(800, 276)
-const PORTRAIT_SLOT := Vector2(260, 250)
+## Bottom left, narrow enough to stay clear of the 6 and 8 o'clock rooms.
+const BOX_SIZE := Vector2(740, 260)
+const PORTRAIT_SLOT := Vector2(236, 236)
 
 static var _id_by_text: Dictionary = {}
 

@@ -1,9 +1,11 @@
 extends Node3D
-## The spirit's flight: a bright streak that carries the ash from the burned
-## tile to the tile where it lands, in a smooth arc, leaving an ember trail,
-## lighting each room it passes and dropping ash where it lands. It is a fire
-## effect, so it is the one place saturated warm color is used (the colors are
-## in room_view.gd COLORS: fire, fire_streak, fire_trail, fire_speck, ash).
+## The spirit's flight: Cinder herself (a camera-facing cut-out of her portrait
+## for the level's mood, softly masked, flickering, wrapped in small flames)
+## carries the ash from the burned tile to the tile where it lands, in a smooth
+## arc, leaning into the flight, leaving an ember trail, lighting each room she
+## passes, and going out in a small flare where the ash lands. The flames are a
+## fire effect, the one place saturated warm color is used (room_view.gd COLORS:
+## fire, fire_streak, fire_trail, fire_speck, ash).
 ##
 ## The ripple camera plans the shot and the flight (see ripple_camera.gd) and
 ## calls launch(); the camera focus follows the same ground path
@@ -31,14 +33,80 @@ const ROOM_LIGHT_TIME := 0.8
 const ROOM_LIGHT_HEIGHT := 3.0
 const ROOM_LIGHT_RADIUS := 10.0
 
-const CORE_RADIUS := 0.22
-const CORE_STRETCH := 2.4
+## Cinder's billboard: about 1.35 tiles tall, lifted so she floats over the tile.
+const CINDER_SIZE := 1.35
+const CINDER_LIFT := 0.35
+const PORTRAIT_DIR := "res://art/portraits/"
+const MOODS := ["amused", "annoyed", "menacing", "triumphant"]
+const DEFAULT_MOOD := "amused"
+## Portraits are downscaled once (with mipmaps) for the small billboard.
+const PORTRAIT_WIDTH := 1024
+## Where she is in each painting (UV of the full image): the crop is centered on
+## her head and upper body; its width in UV (the height follows, keeping it square).
+const CROPS := {
+	"amused": {"center": Vector2(0.49, 0.29), "width": 0.27},
+	"annoyed": {"center": Vector2(0.475, 0.29), "width": 0.27},
+	"triumphant": {"center": Vector2(0.50, 0.28), "width": 0.27},
+	"menacing": {"center": Vector2(0.60, 0.33), "width": 0.30},
+}
+## Soft oval mask (in quad UV, 0.5 = the edge): fully her inside MASK_INNER,
+## gone by MASK_OUTER, so the quad's edges never show.
+const MASK_INNER := 0.22
+const MASK_OUTER := 0.48
+## Seconds she fades out after landing, and the flames around her.
+const LAND_FADE := 0.3
+const FLAME_AMOUNT := 26
+const FLARE_AMOUNT := 22
 const TRAIL_AMOUNT := 70
 const LANDING_AMOUNT := 18
 ## Seconds the landing ash lingers before its nodes are freed.
 const LINGER_TIME := 1.4
 
+const CINDER_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled, blend_mix;
+
+uniform sampler2D portrait : source_color, filter_linear_mipmap, repeat_disable;
+uniform vec2 crop_center = vec2(0.49, 0.29);
+uniform vec2 crop_size = vec2(0.27, 0.48);
+uniform float mask_inner = 0.22;
+uniform float mask_outer = 0.48;
+uniform vec4 glow_color : source_color = vec4(1.0, 0.45, 0.05, 1.0);
+uniform float glow = 0.45;
+uniform float fade = 1.0;
+uniform vec3 heading = vec3(0.0);
+uniform float lean_strength = 0.3;
+uniform float flicker = 0.04;
+
+void vertex() {
+	// Lean into the flight: the heading as seen from the camera tips her top that way.
+	vec2 h = (VIEW_MATRIX * vec4(heading, 0.0)).xy;
+	float lean = length(h) > 0.0001 ? clamp(-normalize(h).x * lean_strength, -lean_strength, lean_strength) : 0.0;
+	float s = 1.0 + flicker * 0.5 * (sin(TIME * 11.0) + sin(TIME * 17.3));
+	vec2 v = VERTEX.xy * s;
+	VERTEX.xy = vec2(v.x * cos(lean) - v.y * sin(lean), v.x * sin(lean) + v.y * cos(lean));
+	// Always face the camera.
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+}
+
+void fragment() {
+	vec3 c = texture(portrait, crop_center + (UV - 0.5) * crop_size).rgb;
+	// A soft oval, a little taller than wide; it is fully gone before any quad edge.
+	float d = length((UV - 0.5) * vec2(1.04, 1.0));
+	float mask = 1.0 - smoothstep(mask_inner, mask_outer, d);
+	float rim = smoothstep(mask_inner * 0.6, mask_outer, d) * mask;
+	float f = 1.0 + flicker * sin(TIME * 13.0 + 1.3);
+	ALBEDO = c * f + glow_color.rgb * glow * rim;
+	ALPHA = mask * fade;
+}
+"""
+
+static var _cinder_shader: Shader = null
+static var _portraits: Dictionary = {}
+
 var _jobs: Array = []
+## The level's spirit mood: which portrait she flies as.
+var mood := DEFAULT_MOOD
 
 
 func _process(delta: float) -> void:
@@ -121,6 +189,49 @@ static func nearest_hour(point: Vector3) -> int:
 	return best
 
 
+## art/portraits/spirit_portrait_<mood>.jpeg; an unknown mood uses amused.
+static func portrait_path(for_mood: String) -> String:
+	return "%sspirit_portrait_%s.jpeg" % [PORTRAIT_DIR, for_mood if for_mood in MOODS else DEFAULT_MOOD]
+
+
+## The crop of the portrait for a mood: {center, size} in UV, square in pixels
+## for an image of `image_size`.
+static func crop_for(for_mood: String, image_size: Vector2 = Vector2(2752, 1536)) -> Dictionary:
+	var crop: Dictionary = CROPS.get(for_mood, CROPS[DEFAULT_MOOD])
+	var width: float = crop["width"]
+	return {"center": crop["center"], "size": Vector2(width, width * image_size.x / image_size.y)}
+
+
+## Her opacity `age` seconds after landing: 1 down to 0 over LAND_FADE.
+static func landing_fade(age: float) -> float:
+	return clampf(1.0 - age / LAND_FADE, 0.0, 1.0)
+
+
+## The mood's portrait, downscaled once with mipmaps and shared (null if missing).
+static func portrait_texture(for_mood: String) -> Texture2D:
+	var path := portrait_path(for_mood)
+	if _portraits.has(path):
+		return _portraits[path]
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		var res = load(path)
+		if res is Texture2D:
+			var image: Image = (res as Texture2D).get_image()
+			if image != null and not image.is_empty():
+				if image.is_compressed():
+					image.decompress()
+				if image.get_width() > PORTRAIT_WIDTH:
+					image.resize(PORTRAIT_WIDTH, int(round(image.get_height() * float(PORTRAIT_WIDTH) / image.get_width())), Image.INTERPOLATE_LANCZOS)
+				image.generate_mipmaps()
+				tex = ImageTexture.create_from_image(image)
+	_portraits[path] = tex
+	return tex
+
+
+func set_mood(new_mood: String) -> void:
+	mood = new_mood if new_mood in MOODS else DEFAULT_MOOD
+
+
 # --- Playback ------------------------------------------------------------------------
 
 ## Starts a flight from `start` to `end` (world positions) after `delay`
@@ -129,7 +240,7 @@ func launch(start: Vector3, end: Vector3, delay: float, duration: float) -> void
 	_jobs.append({
 		"start": start, "end": end, "delay": delay, "duration": maxf(duration, 0.01),
 		"age": 0.0, "landed": false, "landed_at": 0.0, "lit": {},
-		"core": null, "trail": null, "burst": null, "lights": {},
+		"core": null, "flames": null, "trail": null, "burst": null, "flare": null, "lights": {},
 	})
 
 
@@ -157,6 +268,8 @@ func advance(delta: float) -> void:
 			if t >= 1.0:
 				_land(job)
 		_update_lights(job)
+		if job["landed"]:
+			_fade_out(job, job["age"] - job["landed_at"])
 		if job["landed"] and job["age"] - job["landed_at"] >= LINGER_TIME:
 			_free_job(job)
 			_jobs.erase(job)
@@ -182,16 +295,38 @@ func clear() -> void:
 # --- Streak, trail, lights, landing ------------------------------------------------------
 
 func _build_streak(job: Dictionary) -> void:
-	var core := MeshInstance3D.new()
-	core.name = "SpiritStreak"
-	var sphere := SphereMesh.new()
-	sphere.radius = CORE_RADIUS
-	sphere.height = CORE_RADIUS * 2.0
-	core.mesh = sphere
-	core.material_override = _glow(RoomViewScript.COLORS["fire_streak"], 5.0)
-	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(core)
-	job["core"] = core
+	var cinder := MeshInstance3D.new()
+	cinder.name = "SpiritCinder"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(CINDER_SIZE, CINDER_SIZE)
+	cinder.mesh = quad
+	cinder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cinder.material_override = _cinder_material()
+	cinder.extra_cull_margin = CINDER_SIZE  # the shader moves her vertices (billboard, lean)
+	add_child(cinder)
+	job["core"] = cinder
+
+	# Small flames licking around her edge, rising.
+	var flames := CPUParticles3D.new()
+	flames.name = "CinderFlames"
+	flames.amount = FLAME_AMOUNT
+	flames.lifetime = 0.3
+	flames.local_coords = false
+	flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	flames.emission_sphere_radius = CINDER_SIZE * 0.36
+	flames.direction = Vector3(0, 1, 0)
+	flames.spread = 25.0
+	flames.initial_velocity_min = 0.4
+	flames.initial_velocity_max = 0.9
+	flames.gravity = Vector3(0, 2.0, 0)
+	flames.scale_amount_min = 0.1
+	flames.scale_amount_max = 0.2
+	flames.color_ramp = _ramp([RoomViewScript.COLORS["fire"], RoomViewScript.COLORS["fire_trail"],
+		Color(RoomViewScript.COLORS["fire_trail"], 0.0)])
+	flames.mesh = _soft_particle_mesh()
+	flames.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(flames)
+	job["flames"] = flames
 
 	# The ember trail stays where it was emitted (world space), so it hangs behind.
 	var trail := CPUParticles3D.new()
@@ -215,14 +350,13 @@ func _build_streak(job: Dictionary) -> void:
 
 
 func _place_streak(job: Dictionary, t: float) -> void:
-	var core: MeshInstance3D = job["core"]
+	var cinder: MeshInstance3D = job["core"]
 	var pos := arc_position(job["start"], job["end"], t)
 	var ahead := arc_position(job["start"], job["end"], minf(t + 0.03, 1.0))
-	core.position = pos
-	var heading := ahead - pos
-	if heading.length() > 0.001 and core.is_inside_tree():
-		core.look_at(pos + heading, Vector3.UP)
-	core.scale = Vector3(1.0, 1.0, CORE_STRETCH)
+	var body := pos + Vector3(0, CINDER_LIFT, 0)
+	cinder.position = body
+	(cinder.material_override as ShaderMaterial).set_shader_parameter("heading", ahead - pos)
+	(job["flames"] as CPUParticles3D).position = body
 	(job["trail"] as CPUParticles3D).position = pos
 	for hour in rooms_near(Vector3(pos.x, 0.0, pos.z)):
 		_light_room(job, hour)
@@ -260,10 +394,12 @@ func _land(job: Dictionary) -> void:
 	job["landed_at"] = job["age"]
 	var end: Vector3 = job["end"]
 	if job["core"] != null:
-		var core: MeshInstance3D = job["core"]
-		core.position = Vector3(end.x, BASE_HEIGHT, end.z)
-		core.visible = false
+		# She settles on the landing tile and goes out in a small flare (_fade_out).
+		var cinder: MeshInstance3D = job["core"]
+		cinder.position = Vector3(end.x, BASE_HEIGHT + CINDER_LIFT, end.z)
 		(job["trail"] as CPUParticles3D).emitting = false
+		(job["flames"] as CPUParticles3D).emitting = false
+		job["flare"] = _flare(cinder.position)
 	_light_room(job, nearest_hour(end))
 	var burst := CPUParticles3D.new()
 	burst.name = "LandingAsh"
@@ -290,12 +426,72 @@ func _land(job: Dictionary) -> void:
 
 
 func _free_job(job: Dictionary) -> void:
-	for key in ["core", "trail", "burst"]:
+	for key in ["core", "flames", "trail", "burst", "flare"]:
 		_free_node(job[key])
 		job[key] = null
 	for light in job["lights"].values():
 		_free_node(light)
 	job["lights"] = {}
+
+
+## After landing: she fades over LAND_FADE, then her billboard and flames are freed
+## (the trail, ash and lights linger a little longer).
+func _fade_out(job: Dictionary, age: float) -> void:
+	var cinder = job["core"]
+	if cinder == null or not is_instance_valid(cinder):
+		return
+	var alpha := landing_fade(age)
+	(cinder.material_override as ShaderMaterial).set_shader_parameter("fade", alpha)
+	if alpha <= 0.0:
+		_free_node(cinder)
+		_free_node(job["flames"])
+		job["core"] = null
+		job["flames"] = null
+
+
+## A quick burst of fire where she lands.
+func _flare(at: Vector3) -> CPUParticles3D:
+	var flare := CPUParticles3D.new()
+	flare.name = "LandingFlare"
+	flare.one_shot = true
+	flare.explosiveness = 0.95
+	flare.amount = FLARE_AMOUNT
+	flare.lifetime = 0.4
+	flare.local_coords = false
+	flare.direction = Vector3(0, 1, 0)
+	flare.spread = 180.0
+	flare.initial_velocity_min = 1.5
+	flare.initial_velocity_max = 3.0
+	flare.gravity = Vector3.ZERO
+	flare.scale_amount_min = 0.08
+	flare.scale_amount_max = 0.18
+	flare.color_ramp = _ramp([RoomViewScript.COLORS["fire_streak"], RoomViewScript.COLORS["fire"],
+		Color(RoomViewScript.COLORS["fire_trail"], 0.0)])
+	flare.mesh = _soft_particle_mesh()
+	flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flare.position = at
+	add_child(flare)
+	flare.emitting = true
+	return flare
+
+
+func _cinder_material() -> ShaderMaterial:
+	if _cinder_shader == null:
+		_cinder_shader = Shader.new()
+		_cinder_shader.code = CINDER_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = _cinder_shader
+	var tex := portrait_texture(mood)
+	if tex != null:
+		mat.set_shader_parameter("portrait", tex)
+		var crop := crop_for(mood, tex.get_size())
+		mat.set_shader_parameter("crop_center", crop["center"])
+		mat.set_shader_parameter("crop_size", crop["size"])
+	mat.set_shader_parameter("mask_inner", MASK_INNER)
+	mat.set_shader_parameter("mask_outer", MASK_OUTER)
+	mat.set_shader_parameter("glow_color", RoomViewScript.COLORS["fire"])
+	mat.set_shader_parameter("fade", 1.0)
+	return mat
 
 
 func _free_node(node) -> void:
@@ -304,16 +500,6 @@ func _free_node(node) -> void:
 			node.queue_free()
 		else:
 			node.free()
-
-
-func _glow(color: Color, energy: float) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = energy
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	return mat
 
 
 func _particle_mesh() -> Mesh:
@@ -329,6 +515,38 @@ func _particle_mesh() -> Mesh:
 	mat.disable_receive_shadows = true
 	sphere.material = mat
 	return sphere
+
+
+## A soft glowing sprite (camera-facing quad with a radial falloff; normal blend,
+## since additive ones pile up into a white-yellow cloud that hides her):
+## flames read as glow licking around her, not as hard dots.
+static var _soft_mesh: QuadMesh = null
+
+
+func _soft_particle_mesh() -> Mesh:
+	if _soft_mesh == null:
+		var falloff := Gradient.new()
+		falloff.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+		falloff.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.55), Color(1, 1, 1, 0)])
+		var tex := GradientTexture2D.new()
+		tex.gradient = falloff
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		tex.width = 64
+		tex.height = 64
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true  # else every sprite is drawn a full unit wide
+		mat.vertex_color_use_as_albedo = true
+		mat.albedo_texture = tex
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.disable_receive_shadows = true
+		_soft_mesh = QuadMesh.new()
+		_soft_mesh.size = Vector2(1, 1)
+		_soft_mesh.material = mat
+	return _soft_mesh
 
 
 func _ramp(colors: Array) -> Gradient:

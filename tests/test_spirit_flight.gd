@@ -96,9 +96,9 @@ func test_flash_node_flies_lights_and_cleans_up() -> bool:
 	flash.launch(ClockLayoutScript.hour_to_room_position(12), ClockLayoutScript.hour_to_room_position(2), 0.25, 0.8)
 	check(flash.is_flying(), "a flight is queued")
 	flash.advance(0.1)
-	check(flash.get_node_or_null("SpiritStreak") == null, "nothing shows during the delay")
+	check(flash.get_node_or_null("SpiritCinder") == null, "nothing shows during the delay")
 	flash.advance(0.3)
-	check(flash.get_node_or_null("SpiritStreak") != null, "the streak shows once she leaves")
+	check(flash.get_node_or_null("SpiritCinder") != null, "Cinder shows once she leaves")
 	check(flash.get_node_or_null("FlashLight_12") != null, "the 12 o'clock room is lit")
 	flash.advance(1.0)
 	check(not flash.is_flying(), "landed")
@@ -392,4 +392,95 @@ func test_a_trigger_with_no_voiced_line_is_left_alone() -> bool:
 	var r: Dictionary = director.say("on_fail")
 	check(r["text"] != "", "on_fail still says something")
 	director.free()
+	return true
+
+
+# --- Cinder herself -----------------------------------------------------------------------------
+
+func test_mood_picks_her_portrait_with_a_fallback() -> bool:
+	for mood in ["amused", "annoyed", "menacing", "triumphant"]:
+		var path := FlashScript.portrait_path(mood)
+		check_eq(path, "res://art/portraits/spirit_portrait_%s.jpeg" % mood, "portrait for " + mood)
+		check(ResourceLoader.exists(path), "the %s portrait exists" % mood)
+	check_eq(FlashScript.portrait_path("sleepy"), FlashScript.portrait_path("amused"), "an unknown mood falls back to amused")
+	var flash: Node3D = FlashScript.new()
+	flash.set_mood("menacing")
+	check_eq(flash.mood, "menacing", "a known mood is kept")
+	flash.set_mood("nope")
+	check_eq(flash.mood, "amused", "an unknown one becomes amused")
+	flash.free()
+	return true
+
+
+func test_the_crop_is_square_and_inside_the_painting() -> bool:
+	var size := Vector2(2752, 1536)
+	for mood in ["amused", "annoyed", "menacing", "triumphant", "unknown"]:
+		var crop := FlashScript.crop_for(mood, size)
+		var c: Vector2 = crop["center"]
+		var s: Vector2 = crop["size"]
+		check(absf(s.x * size.x - s.y * size.y) < 0.5, "%s: square in pixels, so she is not stretched" % mood)
+		check(c.x - s.x / 2.0 >= 0.0 and c.x + s.x / 2.0 <= 1.0 and c.y - s.y / 2.0 >= 0.0 and c.y + s.y / 2.0 <= 1.0, "%s: inside the image" % mood)
+	check(FlashScript.MASK_OUTER < 0.5, "the soft mask is gone before any quad edge (no hard rectangle)")
+	return true
+
+
+func test_she_fades_after_landing() -> bool:
+	check(is_equal_approx(FlashScript.landing_fade(0.0), 1.0), "fully there as she lands")
+	check(FlashScript.landing_fade(FlashScript.LAND_FADE / 2.0) < 1.0, "fading")
+	check_eq(FlashScript.landing_fade(FlashScript.LAND_FADE), 0.0, "gone after the fade")
+	return true
+
+
+func _cinder_nodes(flash: Node) -> Array:
+	return flash.get_children().filter(func(n): return n.name.begins_with("SpiritCinder") and not n.is_queued_for_deletion())
+
+
+func test_billboard_lives_only_while_she_flies() -> bool:
+	var flash: Node3D = FlashScript.new()
+	Engine.get_main_loop().root.add_child(flash)
+	flash.launch(ClockLayoutScript.hour_to_room_position(12), ClockLayoutScript.hour_to_room_position(2), 0.2, 0.8)
+	flash.advance(0.5)
+	var cinder: Node = flash.get_node_or_null("SpiritCinder")
+	check(cinder != null, "Cinder is there mid-flight")
+	check(cinder.material_override.get_shader_parameter("portrait") != null, "showing her portrait")
+	check(flash.get_node_or_null("CinderFlames") != null, "with flames around her")
+	flash.advance(0.6)  # landed
+	check(flash.get_node_or_null("LandingFlare") != null, "a small flare where she lands")
+	flash.advance(FlashScript.LAND_FADE + 0.05)
+	check_eq(_cinder_nodes(flash).size(), 0, "her billboard is freed after the landing fade")
+	# Skip / cancel: the shot ends early, she lands and fades the same way.
+	flash.launch(ClockLayoutScript.hour_to_room_position(4), ClockLayoutScript.hour_to_room_position(8), 0.0, 0.8)
+	flash.advance(0.2)
+	flash.finish()
+	check(not flash.is_flying(), "skip / cancel lands her at once")
+	flash.advance(FlashScript.LAND_FADE + 0.05)
+	check_eq(_cinder_nodes(flash).size(), 0, "and her billboard is freed")
+	# Undo / restart / load: clear() removes everything at once.
+	flash.launch(ClockLayoutScript.hour_to_room_position(4), ClockLayoutScript.hour_to_room_position(8), 0.0, 0.8)
+	flash.advance(0.2)
+	flash.clear()
+	check_eq(flash.job_count(), 0, "no flights left")
+	check(flash.get_children().all(func(n): return n.is_queued_for_deletion()), "every node of hers is on its way out")
+	Engine.get_main_loop().root.remove_child(flash)
+	flash.free()
+	return true
+
+
+func test_undo_mid_flight_leaves_nothing_behind() -> bool:
+	var main: Node = preload("res://presentation/main.gd").new()
+	main.progress_path = "user://test_flight_progress.json"
+	Engine.get_main_loop().root.add_child(main)
+	main.load_entry({"id": "L01_first_crate", "path": "res://tests/fixtures/L01_first_crate.json"})
+	main.controller.perform({"type": "move", "dir": "right"})
+	main.controller.perform({"type": "burn", "dir": "right"})
+	check(main.flash.job_count() == 1, "she takes off on the burn")
+	main.flash.advance(0.5)
+	check(main.flash.get_node_or_null("SpiritCinder") != null, "mid-flight")
+	main.controller.undo()
+	check_eq(main.flash.job_count(), 0, "undo drops the flight")
+	check(main.flash.get_children().all(func(n): return n.is_queued_for_deletion()), "and every node of hers")
+	main.get_parent().remove_child(main)
+	main.free()
+	if FileAccess.file_exists("user://test_flight_progress.json"):
+		DirAccess.remove_absolute("user://test_flight_progress.json")
 	return true

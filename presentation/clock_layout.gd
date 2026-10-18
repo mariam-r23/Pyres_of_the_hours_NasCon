@@ -8,8 +8,10 @@ const Sun := preload("res://core/sun.gd")
 const RoomViewScript := preload("res://presentation/room_view.gd")
 
 ## Neighbouring rooms are 60 degrees apart, so their centers are RADIUS
-## apart (chord = 2 R sin 30 deg). 9 units leaves a 4-unit gap between 5x5 rooms.
-const RADIUS := 9.0
+## apart (chord = 2 R sin 30 deg). 7.5 units keeps 5x5 rooms apart (at least
+## 1.5 units between 12 and 2) and clear of the hand (its tip reaches 3.9; the
+## nearest room edge along its ray is 4.6 away), so the ring can fill the screen.
+const RADIUS := 7.5
 const HAND_LENGTH := 3.2
 const HAND_TIP_LENGTH := 0.7
 

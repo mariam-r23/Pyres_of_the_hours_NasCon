@@ -12,6 +12,19 @@ const Icons := preload("res://ui/icons.gd")
 const SunDial := preload("res://ui/sun_dial.gd")
 const Sun := preload("res://core/sun.gd")
 
+## Layout (design pixels on the 1920x1080 canvas; with the window's content
+## scale in "expand" mode the canvas only ever grows, and every panel is anchored
+## to its corner or edge, so the HUD stays fully on screen at any size or aspect).
+## The 3D overview is framed to keep the rooms out of these zones (reserved_rects).
+const MARGIN := 24.0
+## Left column: title panel, then the rejection line and the hint under it.
+const LEFT_COLUMN_WIDTH := 440.0
+const LEFT_COLUMN_HEIGHT := 400.0
+const DIAL_PANEL_SIZE := 264.0
+## Right edge, vertically centered: the action bar as a column.
+const BAR_WIDTH := 216.0
+const BAR_HEIGHT := 380.0
+
 ## Seconds the rejection line stays fully visible, then fades.
 const FEEDBACK_HOLD := 2.0
 const FEEDBACK_FADE := 0.5
@@ -68,6 +81,16 @@ func setup(new_bus: Node, new_controller: Node, new_messages: Dictionary, new_co
 
 
 # --- Pure helpers -------------------------------------------------------------
+
+## The screen zones the HUD may cover for a canvas of `size` (design pixels):
+## {title (left column with the toasts), dial, bar}. Rooms must stay out of them.
+static func reserved_rects(size: Vector2) -> Dictionary:
+	return {
+		"left": Rect2(0, 0, MARGIN + LEFT_COLUMN_WIDTH + MARGIN, MARGIN + LEFT_COLUMN_HEIGHT),
+		"dial": Rect2(size.x - DIAL_PANEL_SIZE - 2.0 * MARGIN, 0, DIAL_PANEL_SIZE + 2.0 * MARGIN, DIAL_PANEL_SIZE + 2.0 * MARGIN),
+		"bar": Rect2(size.x - BAR_WIDTH - 2.0 * MARGIN, size.y / 2.0 - BAR_HEIGHT / 2.0 - MARGIN, BAR_WIDTH + 2.0 * MARGIN, BAR_HEIGHT + 2.0 * MARGIN),
+	}
+
 
 ## "Actions 3 / par 10" ("par -" when the level has none).
 static func actions_text(used: int, par: int) -> String:
@@ -165,74 +188,78 @@ func _set_item_hot(id: String, hot: bool) -> void:
 # --- Build --------------------------------------------------------------------
 
 func _build() -> void:
-	# Top left: title, id, actions.
+	# Top left: one column with the title panel, then the rejection line and the
+	# stair / burn hint under it (all clear of the clock).
+	var left := VBoxContainer.new()
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	left.offset_left = MARGIN
+	left.offset_top = MARGIN
+	left.custom_minimum_size = Vector2(LEFT_COLUMN_WIDTH, 0)
+	left.add_theme_constant_override("separation", 12)
+	add_child(left)
 	var info_panel := PanelContainer.new()
 	info_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info_panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.color("panel"), UiTheme.color("shadow_dark"), 18))
-	info_panel.position = Vector2(24, 24)
-	info_panel.custom_minimum_size = Vector2(460, 0)
-	add_child(info_panel)
+	left.add_child(info_panel)
 	var info_col := VBoxContainer.new()
 	info_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info_col.add_theme_constant_override("separation", 2)
 	info_panel.add_child(info_col)
-	title_label = UiTheme.label("", "heading", 34)
+	title_label = UiTheme.label("", "heading", 30)
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # a long title wraps, never widens
 	id_label = UiTheme.label("", "body", 22, UiTheme.color("text_dim"))
-	actions_label = UiTheme.label(actions_text(0, -1), "body", 32)
+	actions_label = UiTheme.label(actions_text(0, -1), "body", 30)
 	for l in [title_label, id_label, actions_label]:
 		info_col.add_child(l)
+	feedback_panel = _toast_panel(left)
+	feedback_label = feedback_panel.get_child(0)
+	hint_panel = _toast_panel(left)
+	hint_label = hint_panel.get_child(0)
+	feedback_panel.visible = false
+	hint_panel.visible = false
 
 	# Top right: the sun dial.
 	var dial_panel := PanelContainer.new()
 	dial_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dial_panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.color("panel"), UiTheme.color("shadow_dark"), 8))
 	dial_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	dial_panel.offset_left = -24 - 300
-	dial_panel.offset_right = -24
-	dial_panel.offset_top = 24
-	dial_panel.offset_bottom = 24 + 300
+	dial_panel.offset_left = -MARGIN - DIAL_PANEL_SIZE
+	dial_panel.offset_right = -MARGIN
+	dial_panel.offset_top = MARGIN
+	dial_panel.offset_bottom = MARGIN + DIAL_PANEL_SIZE
 	add_child(dial_panel)
 	dial = SunDial.new()
+	dial.custom_minimum_size = Vector2(DIAL_PANEL_SIZE - 16.0, DIAL_PANEL_SIZE - 16.0)
 	dial_panel.add_child(dial)
 
-	# Top center: the rejection line, and under it the stair / burn hint.
-	feedback_panel = _toast_panel(24)
-	feedback_label = feedback_panel.get_child(0)
-	hint_panel = _toast_panel(96)
-	hint_label = hint_panel.get_child(0)
-	feedback_panel.visible = false
-	hint_panel.visible = false
-
-	# Bottom center: the action bar.
+	# Right edge, vertically centered: the action bar as a column, so the bottom
+	# of the screen stays free for the 6 o'clock room and Cinder's box.
 	var bar := PanelContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.color("panel"), UiTheme.color("shadow_dark"), 10))
-	# Bottom right, so the bottom left stays free for Cinder's dialogue box.
-	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
 	bar.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	bar.offset_right = -24
-	bar.offset_bottom = -24
+	bar.grow_vertical = Control.GROW_DIRECTION_BOTH
+	bar.offset_right = -MARGIN
 	add_child(bar)
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation", 10)
-	bar.add_child(row)
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 8)
+	bar.add_child(column)
 	for spec in ACTIONS:
 		var item := _action_item(spec)
 		action_items[spec["id"]] = item
-		row.add_child(item)
+		column.add_child(item)
 
 
-func _toast_panel(top: float) -> PanelContainer:
+func _toast_panel(parent: Control) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.color("panel"), UiTheme.color("shadow_dark"), 12))
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.offset_top = top
-	add_child(panel)
-	var label := UiTheme.label("", "body", 32, UiTheme.NONE, HORIZONTAL_ALIGNMENT_CENTER)
+	parent.add_child(panel)
+	var label := UiTheme.label("", "body", 28)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(label)
 	return panel
 
@@ -249,7 +276,7 @@ func _action_item(spec: Dictionary) -> Button:
 	var item := Button.new()
 	item.text = spec["label"]
 	item.focus_mode = Control.FOCUS_NONE  # Space / Enter must never click it
-	item.custom_minimum_size = Vector2(196, 68)
+	item.custom_minimum_size = Vector2(BAR_WIDTH - 20.0, 64)
 	item.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	UiTheme.style_button(item, UiTheme.color("shadow_light"))
 	item.add_theme_stylebox_override("normal", _item_box(UiTheme.color("shadow_dark")))
