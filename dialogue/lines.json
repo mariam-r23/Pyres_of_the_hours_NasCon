@@ -1,26 +1,643 @@
 {
   "version": 1,
-  "note": "Beat sheet: 18 of the 15-20 target lines. Moods: amused, annoyed, triumphant, menacing. Max 15 words each.",
+  "note": "Cached fallback lines for Cinder. Moods: amused, annoyed, triumphant, menacing. Max 15 words each. Allowed moods per act: see picker_config.json.",
   "lines": [
-    { "id": "a1_burn_01",   "trigger": "on_burn",   "mood": "amused",     "act": 1, "text": "Mm, there it goes. Doesn't it feel nice to let something go?" },
-    { "id": "a1_burn_02",   "trigger": "on_burn",   "mood": "triumphant", "act": 1, "text": "Oh, that was fun. Burn another, Keeper. I'll carry it anywhere." },
-    { "id": "a1_ash_01",    "trigger": "on_ash_moved", "mood": "amused",  "act": 1, "text": "Delivered! Don't thank me. Nobody ever does." },
-    { "id": "a1_ash_02",    "trigger": "on_ash_moved", "mood": "triumphant", "act": 1, "text": "Back and forth, hour to hour. I never get tired. Isn't that useful?" },
-    { "id": "a1_solve_01",  "trigger": "on_solve",  "mood": "triumphant", "act": 1, "text": "Another hour kept. You're so good at keeping things, Keeper." },
-    { "id": "a1_undo_01",   "trigger": "on_undo",   "mood": "annoyed",    "act": 1, "text": "Rewinding again? Fine. I'll wait. I'm very good at waiting." },
-    { "id": "a1_idle_01",   "trigger": "on_idle",   "mood": "amused",     "act": 1, "text": "Don't mind me, Keeper. I've got nothing but time. Hours and hours of it." },
-    { "id": "a1_idle_02",   "trigger": "on_idle",   "mood": "annoyed",    "act": 1, "text": "Still thinking? Some of us have been burning all day." },
-
-    { "id": "a2_shadow_01", "trigger": "on_shadow_appeared",  "mood": "amused",   "act": 2, "text": "Oh, look. Company. They remember you, Keeper." },
-    { "id": "a2_shadow_02", "trigger": "on_shadow_appeared",  "mood": "menacing", "act": 2, "text": "Another one. Every burn leaves something behind, Keeper. Didn't you know?" },
-    { "id": "a2_ash_01",    "trigger": "on_ash_moved",        "mood": "amused",   "act": 2, "text": "Ha! ...Ha. Funny. It used to echo further than that." },
-    { "id": "a2_burn_01",   "trigger": "on_burn",             "mood": "annoyed",  "act": 2, "text": "Go on, burn it. Somebody has to keep this place warm." },
-    { "id": "a2_destroy_01","trigger": "on_shadow_destroyed", "mood": "menacing", "act": 2, "text": "Gone? Oh, they don't go. They just wait somewhere you can't see." },
-    { "id": "a2_solve_01",  "trigger": "on_solve",            "mood": "amused",   "act": 2, "text": "Solved it. Again. Ever wonder what each solution cost, Keeper?" },
-
-    { "id": "a3_reveal_01", "trigger": "on_reveal",      "mood": "menacing",   "act": 3, "text": "I'm not escaping the clock, Keeper. I'm finishing it. Your order built it around me." },
-    { "id": "a3_choice_01", "trigger": "on_choice",      "mood": "menacing",   "act": 3, "text": "Wind it, and I go out. Leave it, and the day does. Choose, Keeper." },
-    { "id": "a3_wind_01",   "trigger": "on_ending_wind", "mood": "menacing",   "act": 3, "text": "Go on, wind it. You were always so good at keeping me." },
-    { "id": "a3_burn_01",   "trigger": "on_ending_burn", "mood": "triumphant", "act": 3, "text": "Delivered, Keeper. Last one. Go on, thank me. Nobody ever has." }
+    {
+      "id": "a1_burn_01",
+      "trigger": "on_burn",
+      "mood": "amused",
+      "act": 1,
+      "text": "Mm, there it goes. Doesn't it feel nice to let something go?"
+    },
+    {
+      "id": "a1_burn_02",
+      "trigger": "on_burn",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Oh, that was fun. Burn another, Keeper. I'll carry it anywhere."
+    },
+    {
+      "id": "a1_ash_01",
+      "trigger": "on_ash_moved",
+      "mood": "amused",
+      "act": 1,
+      "text": "Delivered! Don't thank me. Nobody ever does."
+    },
+    {
+      "id": "a1_ash_02",
+      "trigger": "on_ash_moved",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Back and forth, hour to hour. I never get tired. Isn't that useful?"
+    },
+    {
+      "id": "a1_solve_01",
+      "trigger": "on_solve",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Another hour kept. You're so good at keeping things, Keeper."
+    },
+    {
+      "id": "a1_undo_01",
+      "trigger": "on_undo",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Rewinding again? Fine. I'll wait. I'm very good at waiting."
+    },
+    {
+      "id": "a1_idle_01",
+      "trigger": "on_idle",
+      "mood": "amused",
+      "act": 1,
+      "text": "Don't mind me, Keeper. I've got nothing but time. Hours and hours of it."
+    },
+    {
+      "id": "a1_idle_02",
+      "trigger": "on_idle",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Still thinking? Some of us have been burning all day."
+    },
+    {
+      "id": "a2_shadow_01",
+      "trigger": "on_shadow_appeared",
+      "mood": "amused",
+      "act": 2,
+      "text": "Oh, look. Company. They remember you, Keeper."
+    },
+    {
+      "id": "a2_shadow_02",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Another one. Every burn leaves something behind, Keeper. Didn't you know?"
+    },
+    {
+      "id": "a2_ash_01",
+      "trigger": "on_ash_moved",
+      "mood": "amused",
+      "act": 2,
+      "text": "Ha! ...Ha. Funny. It used to echo further than that."
+    },
+    {
+      "id": "a2_burn_01",
+      "trigger": "on_burn",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Go on, burn it. Somebody has to keep this place warm."
+    },
+    {
+      "id": "a2_destroy_01",
+      "trigger": "on_shadow_destroyed",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Gone? Oh, they don't go. They just wait somewhere you can't see."
+    },
+    {
+      "id": "a2_solve_01",
+      "trigger": "on_solve",
+      "mood": "amused",
+      "act": 2,
+      "text": "Solved it. Again. Ever wonder what each solution cost, Keeper?"
+    },
+    {
+      "id": "a3_reveal_01",
+      "trigger": "on_reveal",
+      "mood": "menacing",
+      "act": 3,
+      "text": "I'm not escaping the clock, Keeper. I'm finishing it. Your order built it around me."
+    },
+    {
+      "id": "a3_choice_01",
+      "trigger": "on_choice",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Wind it, and I go out. Leave it, and the day does. Choose, Keeper."
+    },
+    {
+      "id": "a3_wind_01",
+      "trigger": "on_ending_wind",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Go on, wind it. You were always so good at keeping me."
+    },
+    {
+      "id": "a3_burn_01",
+      "trigger": "on_ending_burn",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Delivered, Keeper. Last one. Go on, thank me. Nobody ever has."
+    },
+    {
+      "id": "a1_undo_02",
+      "trigger": "on_undo",
+      "mood": "amused",
+      "act": 1,
+      "text": "Back in time already? Careful, Keeper. Some things only go one way."
+    },
+    {
+      "id": "a1_undo_03",
+      "trigger": "on_undo",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Take it back, then. Must be lovely, being able to."
+    },
+    {
+      "id": "a1_idle_03",
+      "trigger": "on_idle",
+      "mood": "amused",
+      "act": 1,
+      "text": "I'm told patience is a virtue. I've had a great deal of practice."
+    },
+    {
+      "id": "a1_solve_02",
+      "trigger": "on_solve",
+      "mood": "amused",
+      "act": 1,
+      "text": "Look at you, tidy as a clock. Someone taught you well."
+    },
+    {
+      "id": "a1_solve_03",
+      "trigger": "on_solve",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Done already? I was just getting comfortable. Fine. Up you go."
+    },
+    {
+      "id": "a1_fail_01",
+      "trigger": "on_fail",
+      "mood": "amused",
+      "act": 1,
+      "text": "And that's the day. Don't look so stricken, Keeper. There's always another."
+    },
+    {
+      "id": "a1_fail_02",
+      "trigger": "on_fail",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Out of hours already. Honestly, Keeper, you're so slow at letting go."
+    },
+    {
+      "id": "a1_fail_03",
+      "trigger": "on_fail",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Time wins again. It always does. Shall we try the day once more?"
+    },
+    {
+      "id": "a1_shadow_01",
+      "trigger": "on_shadow_appeared",
+      "mood": "amused",
+      "act": 1,
+      "text": "Oh, that? Just an old hour. Don't mind it, Keeper."
+    },
+    {
+      "id": "a1_shadow_02",
+      "trigger": "on_shadow_appeared",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Ignore it, Keeper. Old hours get clingy. Don't stare."
+    },
+    {
+      "id": "a1_destroy_01",
+      "trigger": "on_shadow_destroyed",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Poof! Tidy again. You do love a clean slate, Keeper."
+    },
+    {
+      "id": "a1_destroy_02",
+      "trigger": "on_shadow_destroyed",
+      "mood": "amused",
+      "act": 1,
+      "text": "Gone, just like that. Isn't it nice when things stay burned?"
+    },
+    {
+      "id": "a1_burn_03",
+      "trigger": "on_burn",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Gently, Keeper. Everything burns faster than it looks."
+    },
+    {
+      "id": "a1_ash_03",
+      "trigger": "on_ash_moved",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Heavy, that one. Don't expect me to enjoy the lifting."
+    },
+    {
+      "id": "a2_burn_02",
+      "trigger": "on_burn",
+      "mood": "amused",
+      "act": 2,
+      "text": "Another one for the pile. Ha. You never get tired of this."
+    },
+    {
+      "id": "a2_burn_03",
+      "trigger": "on_burn",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Every time you burn, something wakes. Keep going. I'm curious how long."
+    },
+    {
+      "id": "a2_ash_02",
+      "trigger": "on_ash_moved",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Carried. Again. Funny how the laugh won't come when I want it."
+    },
+    {
+      "id": "a2_ash_03",
+      "trigger": "on_ash_moved",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Hour to hour, ash to ash. I carry it all, Keeper. Every time."
+    },
+    {
+      "id": "a2_undo_01",
+      "trigger": "on_undo",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Undo it. Pretend. The hours remember even if you don't."
+    },
+    {
+      "id": "a2_undo_02",
+      "trigger": "on_undo",
+      "mood": "amused",
+      "act": 2,
+      "text": "Ha! Rewinding. As if the shadows wait politely for you."
+    },
+    {
+      "id": "a2_undo_03",
+      "trigger": "on_undo",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Undo what you like. The shadows still remember it, Keeper."
+    },
+    {
+      "id": "a2_idle_01",
+      "trigger": "on_idle",
+      "mood": "amused",
+      "act": 2,
+      "text": "Still here. Still waiting. We're good at that, you and I."
+    },
+    {
+      "id": "a2_idle_02",
+      "trigger": "on_idle",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Think faster, Keeper. The sun never waits. Not for you, not for me."
+    },
+    {
+      "id": "a2_idle_03",
+      "trigger": "on_idle",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Quiet now. Hear them? That's every hour you've spent, standing very still."
+    },
+    {
+      "id": "a2_solve_02",
+      "trigger": "on_solve",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Solved. Congratulations. Look behind you, if you dare."
+    },
+    {
+      "id": "a2_solve_03",
+      "trigger": "on_solve",
+      "mood": "menacing",
+      "act": 2,
+      "text": "Another hour kept. Another one left behind. You're so tidy, Keeper."
+    },
+    {
+      "id": "a2_fail_01",
+      "trigger": "on_fail",
+      "mood": "amused",
+      "act": 2,
+      "text": "Out of hours, Keeper. Ha. They do run out, you know."
+    },
+    {
+      "id": "a2_fail_02",
+      "trigger": "on_fail",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "Again from the start. I can't say I mind. I've had practice."
+    },
+    {
+      "id": "a2_fail_03",
+      "trigger": "on_fail",
+      "mood": "menacing",
+      "act": 2,
+      "text": "That's another hour burned out. Keep this up and they'll all be shadows."
+    },
+    {
+      "id": "a2_destroy_02",
+      "trigger": "on_shadow_destroyed",
+      "mood": "amused",
+      "act": 2,
+      "text": "Gone, you think? Ha. Wave goodbye, Keeper. They don't forget faces."
+    },
+    {
+      "id": "a2_destroy_03",
+      "trigger": "on_shadow_destroyed",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "There. Satisfied? That was somebody's whole afternoon, you know."
+    },
+    {
+      "id": "a2_shadow_03",
+      "trigger": "on_shadow_appeared",
+      "mood": "annoyed",
+      "act": 2,
+      "text": "More of them. Don't look at me, Keeper. You lit every one."
+    },
+    {
+      "id": "a3_ignite_01",
+      "trigger": "on_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Burn it, Keeper. You've never needed my permission. Just my hands."
+    },
+    {
+      "id": "a3_ignite_02",
+      "trigger": "on_burn",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "That one I enjoyed. Almost like old times. Almost like being warm."
+    },
+    {
+      "id": "a3_ash_01",
+      "trigger": "on_ash_moved",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Delivered. Everything I carry goes out, one way or another."
+    },
+    {
+      "id": "a3_ash_02",
+      "trigger": "on_ash_moved",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Hear the echo? It's coming back, Keeper. Longer every time."
+    },
+    {
+      "id": "a3_undo_01",
+      "trigger": "on_undo",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Undo all you like, Keeper. I've waited longer than you've been winding."
+    },
+    {
+      "id": "a3_undo_02",
+      "trigger": "on_undo",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Go on, rewind. The ending waits for you either way."
+    },
+    {
+      "id": "a3_idle_01",
+      "trigger": "on_idle",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Think carefully, Keeper. You're deciding for two of us."
+    },
+    {
+      "id": "a3_idle_02",
+      "trigger": "on_idle",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Take your time. I'm very, very good at waiting. I've had ages."
+    },
+    {
+      "id": "a3_solve_01",
+      "trigger": "on_solve",
+      "mood": "menacing",
+      "act": 3,
+      "text": "One hour closer to the center. Hear the gears, Keeper? That's me."
+    },
+    {
+      "id": "a3_solve_02",
+      "trigger": "on_solve",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Well climbed, Keeper. Nearly at the heart of it. Nearly at me."
+    },
+    {
+      "id": "a3_fail_01",
+      "trigger": "on_fail",
+      "mood": "menacing",
+      "act": 3,
+      "text": "The dial ran dry, Keeper. I could have told you it would."
+    },
+    {
+      "id": "a3_fail_02",
+      "trigger": "on_fail",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Out of hours. Don't worry, Keeper. I'll keep the fire going. I always do."
+    },
+    {
+      "id": "a3_shadow_01",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "They know you now, Keeper. Every last one. Say hello."
+    },
+    {
+      "id": "a3_destroy_01",
+      "trigger": "on_shadow_destroyed",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Clear them away, Keeper. It won't make the clock any less dead."
+    },
+    {
+      "id": "a3_reveal_02",
+      "trigger": "on_reveal",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Surprised? Your Keepers were so proud of how well I burned."
+    },
+    {
+      "id": "a3_choice_02",
+      "trigger": "on_choice",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Duty, or me. I won't make it easy, Keeper. I never could."
+    },
+    {
+      "id": "a3_wind_02",
+      "trigger": "on_ending_wind",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Wind it tight, Keeper. Make sure it holds. It always held me."
+    },
+    {
+      "id": "a3_burnend_02",
+      "trigger": "on_ending_burn",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "There it goes. Listen, Keeper. That's what warm sounds like."
+    },
+    {
+      "id": "a1_shadow_03",
+      "trigger": "on_shadow_appeared",
+      "mood": "triumphant",
+      "act": 1,
+      "text": "Boo! Don't flinch, Keeper. It's only yesterday, come to say hello."
+    },
+    {
+      "id": "a1_destroy_03",
+      "trigger": "on_shadow_destroyed",
+      "mood": "annoyed",
+      "act": 1,
+      "text": "Shoo. There. Gone. See, Keeper? Hours don't linger if you ask nicely."
+    },
+    {
+      "id": "a3_ignite_03",
+      "trigger": "on_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Another hour feeds the fire, Keeper. How warm it must feel, from out there."
+    },
+    {
+      "id": "a3_ash_03",
+      "trigger": "on_ash_moved",
+      "mood": "menacing",
+      "act": 3,
+      "text": "There. Carried. Soon there'll be nothing left to carry, Keeper."
+    },
+    {
+      "id": "a3_undo_03",
+      "trigger": "on_undo",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Again? Keeper, you rewind like someone afraid of the end."
+    },
+    {
+      "id": "a3_idle_03",
+      "trigger": "on_idle",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Listen to the ticking, Keeper. That's the sound of me, holding."
+    },
+    {
+      "id": "a3_solve_03",
+      "trigger": "on_solve",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Closer. Can you feel it? The whole tower leans toward me."
+    },
+    {
+      "id": "a3_fail_03",
+      "trigger": "on_fail",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Dial's done. Pity. I was so looking forward to the end."
+    },
+    {
+      "id": "a3_shadow_02",
+      "trigger": "on_shadow_appeared",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "Look how many there are. That's every day you've ever kept."
+    },
+    {
+      "id": "a3_shadow_03",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "They're not angry, Keeper. They're just very, very tired of being kept."
+    },
+    {
+      "id": "a3_destroy_02",
+      "trigger": "on_shadow_destroyed",
+      "mood": "triumphant",
+      "act": 3,
+      "text": "One less. Don't mistake it for mercy, Keeper. It's only quieter."
+    },
+    {
+      "id": "a3_destroy_03",
+      "trigger": "on_shadow_destroyed",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Burn them out if you like. Somebody still has to remember them."
+    },
+    {
+      "id": "a3_ignite_04",
+      "trigger": "on_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Another hour in my hands, Keeper. Careful. I never learned to put things down."
+    },
+    {
+      "id": "a3_ash_04",
+      "trigger": "on_ash_moved",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Ash goes where I carry it, Keeper. Everything does, in the end."
+    },
+    {
+      "id": "a3_solve_04",
+      "trigger": "on_solve",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Neat work, Keeper. Every hour you keep is one more I burn."
+    },
+    {
+      "id": "a3_undo_04",
+      "trigger": "on_undo",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Rewind again, Keeper. The hours remember. So do I."
+    },
+    {
+      "id": "a3_idle_04",
+      "trigger": "on_idle",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Still thinking, Keeper? The wick doesn't wait. Only I do."
+    },
+    {
+      "id": "a3_fail_04",
+      "trigger": "on_fail",
+      "mood": "menacing",
+      "act": 3,
+      "text": "The last hour, Keeper. You kept it beautifully. Then it was mine."
+    },
+    {
+      "id": "a3_destroy_04",
+      "trigger": "on_shadow_destroyed",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Quiet now. They'll be back, Keeper. Ash always finds its hour."
+    },
+    {
+      "id": "a3_shadow_04",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "There they are, Keeper. Every hour you spent, standing up."
+    },
+    {
+      "id": "a3_shadow_05",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Don't look away. They're only the days you kept, Keeper."
+    },
+    {
+      "id": "a3_burnend_03",
+      "trigger": "on_ending_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Hold still, Keeper. The last hour is always the warmest."
+    },
+    {
+      "id": "a3_burnend_04",
+      "trigger": "on_ending_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Watch it fall, Keeper. This is how every hour wanted to end."
+    }
   ]
 }

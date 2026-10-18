@@ -6,6 +6,7 @@ Then check them:                              python run_cases.py
 """
 import json
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.abspath(os.path.join(HERE, "..", "..", "tests", "cases"))
@@ -198,6 +199,21 @@ lv.append(case("L02 solution wins in 15", "L02_wake_the_shadow",
 lv.append(case("L02 burning the gate too early leaves the shadow in the way", "L02_wake_the_shadow",
                [R, R, "burn:up", "interact", R, "burn:right", R, R],
                rejected_at=7, reason="shadow_blocks", actions_used=7))
+# Every other shipped level gets an automatic "solution wins" case from the Python solver.
+sys.path.insert(0, HERE)
+from pyre_ref import load_level, solve  # noqa: E402
+from pyre_ref.solver import action_str  # noqa: E402
+
+LEVELS_DIR = os.path.abspath(os.path.join(HERE, "..", "..", "levels", "data"))
+HAND_WRITTEN = {"L01_first_crate", "L02_wake_the_shadow"}
+for fn in sorted(os.listdir(LEVELS_DIR)):
+    if fn.endswith(".json") and fn[:-5] not in HAND_WRITTEN:
+        level = load_level(os.path.join(LEVELS_DIR, fn))
+        plan = solve(level)
+        assert plan.solved, f"{level.id} is not solvable"
+        lv.append(case(f"{level.id} solution wins in {len(plan.actions)}", level.id,
+                       [action_str(a) for a in plan.actions], won=True, failed=False,
+                       actions_used=len(plan.actions)))
 files["levels_shipped.json"] = lv
 
 # ------------------------------------------------------------------ fixture that must be unsolvable

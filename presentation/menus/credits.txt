@@ -1,0 +1,21 @@
+PYRE OF THE HOURS
+A 3-day game jam project.
+
+TEAM
+Anosha  - core game logic, presentation glue, ripple camera, menus, integration
+Mariam  - puzzles and levels, dialogue (Cinder, the fire spirit), UI, solver and level tools, Python reference
+Noor    - art, VFX, audio, trailer
+
+AI TOOLS USED
+Claude Code (Anthropic) - code assistance for core logic, presentation scripts and tests
+TBD from Mariam/Noor - tools used for dialogue, art, voice, music and the trailer
+
+ASSETS AND LICENSES
+Godot Engine 4.4.1 - MIT license
+All placeholder geometry and effects are built in code for this project.
+TBD from Mariam/Noor - art, audio and font credits with their licenses
+
+THANKS
+TBD from Mariam/Noor
+
+Made for the jam themes Fire, Shadow and Time.

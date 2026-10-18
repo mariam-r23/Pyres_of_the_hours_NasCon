@@ -64,5 +64,198 @@
    "reason": "shadow_blocks",
    "actions_used": 7
   }
+ },
+ {
+  "name": "L03_wrong_ash solution wins in 10",
+  "level": "L03_wrong_ash",
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 10
+  }
+ },
+ {
+  "name": "L04_late_arrivals solution wins in 10",
+  "level": "L04_late_arrivals",
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 10
+  }
+ },
+ {
+  "name": "L05_thin_echo solution wins in 12",
+  "level": "L05_thin_echo",
+  "actions": [
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 12
+  }
+ },
+ {
+  "name": "L06_spent_hours solution wins in 17",
+  "level": "L06_spent_hours",
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 17
+  }
+ },
+ {
+  "name": "L07_crowded_room solution wins in 11",
+  "level": "L07_crowded_room",
+  "actions": [
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 11
+  }
+ },
+ {
+  "name": "L08_everything_you_burned solution wins in 18",
+  "level": "L08_everything_you_burned",
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:up",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 18
+  }
+ },
+ {
+  "name": "L09_the_fuel solution wins in 11",
+  "level": "L09_the_fuel",
+  "actions": [
+   "move:up",
+   "move:down",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 11
+  }
+ },
+ {
+  "name": "L10_center_of_the_dial solution wins in 16",
+  "level": "L10_center_of_the_dial",
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right"
+  ],
+  "expect": {
+   "won": true,
+   "failed": false,
+   "actions_used": 16
+  }
  }
 ]

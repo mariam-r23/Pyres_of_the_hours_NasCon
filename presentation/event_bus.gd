@@ -26,6 +26,20 @@ signal level_loaded(meta: Dictionary)
 signal level_load_failed(errors: Array)
 signal level_restarted
 
+# --- Spirit dialogue, ending and HUD (presentation; ui/ listens to these) ---
+## The fire spirit says a line (one per action at most). mood is the mood the
+## line was written in (lines.json), even when the picker fell back a tier.
+signal spirit_said(trigger: String, mood: String, text: String)
+## The last level was won: ui/ should show the ending choice.
+signal ending_choice_requested(level_id: String)
+## The player chose the ending: "wind" or "burn" (ui/ emits this).
+signal ending_chosen(choice: String)
+## After every redraw: {level_id, title, actions_used, par, sun_index, sun_hour, status}.
+signal hud_changed(info: Dictionary)
+## The ripple shot started / finished (relayed from the ripple camera).
+signal ripple_started
+signal ripple_finished
+
 ## Event types emit_events() routes; each is also a signal name above.
 const CORE_EVENT_TYPES := [
 	"moved", "burned", "ash_moved", "shadow_appeared", "shadow_destroyed",

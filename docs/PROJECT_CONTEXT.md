@@ -209,8 +209,7 @@ This level is solvable. **Copy this structure for new levels.**
     { "id": "exit_1", "type": "exit", "hour": 2, "slot": [4, 2], "state": "INTACT", "flammable": false }
   ],
   "shadows": [],
-  "par_actions": 10,
-  "spirit_lines": { "on_burn": "Oh, that was fun.", "on_solve": "You're no fun when you win." }
+  "par_actions": 10
 }
 ```
 

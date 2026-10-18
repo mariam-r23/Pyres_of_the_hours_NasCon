@@ -35,7 +35,7 @@ if loaded["error"] != "":
 	push_error(loaded["error"])          # one line per problem
 	return
 var errors := LevelValidator.validate(loaded["state"])   # [] means valid
-var meta: Dictionary = loaded["meta"]    # title, act, spirit_mood, mood_weights, par_actions, spirit_lines
+var meta: Dictionary = loaded["meta"]    # title, act, spirit_mood, mood_weights, par_actions
 ```
 
 `TurnManager.load_level(data)` is a shortcut that returns the GameState, or `null`

@@ -20,6 +20,15 @@ const SUITES := [
 	"res://tests/test_views.gd",
 	"res://tests/test_progression.gd",
 	"res://tests/test_feedback.gd",
+	"res://tests/test_ripple.gd",
+	"res://tests/test_spirit.gd",
+	"res://tests/test_passed_hours.gd",
+	"res://tests/test_menus.gd",
+	"res://tests/test_ui.gd",
+	"res://tests/test_spirit_flight.gd",
+	"res://tests/test_painted_floor.gd",
+	"res://tests/test_layout.gd",
+	"res://tests/test_shadow_figure.gd",
 ]
 
 ## Our own case file; every *.json in SHARED_CASES_DIR (Mariam's) runs too.
@@ -28,13 +37,19 @@ const SHARED_CASES_DIR := "res://tests/cases"
 
 var passed := 0
 var failed := 0
+var _started := false
 
 
-func _init() -> void:
-	_run_suites()
-	_run_cases()
-	print("\n%d passed, %d failed" % [passed, failed])
-	quit(1 if failed > 0 else 0)
+## Runs on the first frame rather than in _init: by then the tree is live,
+## so tests can add real nodes (e.g. main.gd) and their _ready runs.
+func _process(_delta: float) -> bool:
+	if not _started:
+		_started = true
+		_run_suites()
+		_run_cases()
+		print("\n%d passed, %d failed" % [passed, failed])
+		quit(1 if failed > 0 else 0)
+	return false
 
 
 func _run_suites() -> void:

@@ -33,5 +33,150 @@
    "move:right",
    "move:right"
   ]
+ },
+ "L03_wrong_ash": {
+  "length": 10,
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L04_late_arrivals": {
+  "length": 10,
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L05_thin_echo": {
+  "length": 12,
+  "actions": [
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L06_spent_hours": {
+  "length": 17,
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L07_crowded_room": {
+  "length": 11,
+  "actions": [
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L08_everything_you_burned": {
+  "length": 18,
+  "actions": [
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:up",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L09_the_fuel": {
+  "length": 11,
+  "actions": [
+   "move:up",
+   "move:down",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right",
+   "move:right",
+   "move:right"
+  ]
+ },
+ "L10_center_of_the_dial": {
+  "length": 16,
+  "actions": [
+   "move:right",
+   "move:right",
+   "move:right",
+   "burn:up",
+   "burn:left",
+   "move:right",
+   "interact",
+   "move:right",
+   "wait",
+   "burn:right",
+   "move:right",
+   "move:right",
+   "move:right",
+   "interact",
+   "move:right",
+   "move:right"
+  ]
  }
 }
