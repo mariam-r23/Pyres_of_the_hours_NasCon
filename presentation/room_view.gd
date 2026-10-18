@@ -10,6 +10,7 @@ extends Node3D
 
 const GameStateScript := preload("res://core/game_state.gd")
 const Sun := preload("res://core/sun.gd")
+const PaintedFloor := preload("res://presentation/painted_floor.gd")
 
 ## ALL colors live here so Noor can restyle in one place.
 ## Color rule: the world is cold (slate blue, ash gray). Only fire effects
@@ -18,6 +19,7 @@ const Sun := preload("res://core/sun.gd")
 ## deep red-orange (low brightness), never a bright saturated orange.
 const COLORS := {
 	"floor": Color(0.19, 0.22, 0.27),        # slate
+	"floor_grid": Color(0.78, 0.86, 0.95, 0.2), # faint cold lines over the painted floor
 	"wall": Color(0.36, 0.38, 0.42),         # ash gray stone
 	"chasm": Color(0.04, 0.05, 0.07),        # near-black pit
 	"bridge": Color(0.33, 0.36, 0.40),       # cold weathered planks
@@ -126,6 +128,13 @@ var _target_grade := {}
 var _grade_tween: Tween = null
 var _soot_fresh_material: StandardMaterial3D = null
 var _soot_count_before := 0
+## The painted floor (Noor's hour painting): one material per room, graded with it.
+var _floor_material: ShaderMaterial = null
+var _floor_hour := -1
+var _floor_used := true
+var _floor_node: MeshInstance3D = null
+var _grid_node: MeshInstance3D = null
+var _floor_look_shown := {}
 
 
 ## How the sun has treated this room: passed (and how many hours ago:
@@ -252,6 +261,7 @@ func refresh(state: GameStateScript, hour: int, hidden_slots: Array = [],
 	for y in grid_h:
 		for x in grid_w:
 			_draw_terrain(state.terrain_at(hour, Vector2i(x, y)), Vector2i(x, y))
+	_draw_painted_floor(state, hour)
 	for obj in state.objects.values():
 		if obj["hour"] == hour and obj["state"] != GameStateScript.GONE and not hidden_slots.has(obj["slot"]):
 			_draw_object(obj)
@@ -297,6 +307,10 @@ func _blend_grade(from: Dictionary, to: Dictionary, t: float) -> void:
 
 ## Applies brightness / emission to every graded material of this room.
 func _apply_grade(grade: Dictionary) -> void:
+	if _floor_material != null:
+		_floor_look_shown = PaintedFloor.floor_look(grade, _floor_used)
+		_floor_material.set_shader_parameter("brightness", _floor_look_shown["brightness"])
+		_floor_material.set_shader_parameter("saturation", _floor_look_shown["saturation"])
 	for mat in _material_base:
 		if _material_base[mat]["graded"]:
 			_apply_grade_to(mat, grade)
@@ -322,6 +336,47 @@ func _draw_soot(state: GameStateScript, hour: int, count: int) -> void:
 		var at := slot_to_position(spot["slot"]) + Vector3(spot["offset"].x, 0.004, spot["offset"].y)
 		var node := _mesh(quad, at, soot_mat if i < _soot_count_before else _soot_fresh_material)
 		node.rotation_degrees.y = spot["angle"]
+
+
+## The hour's painting on the walkable cells (cover-cropped to the room), and
+## faint grid lines over it when the level uses this room.
+func _draw_painted_floor(state: GameStateScript, hour: int) -> void:
+	if _floor_material == null or _floor_hour != hour:
+		_floor_material = PaintedFloor.new_material(hour)
+		_floor_hour = hour
+	_floor_used = PaintedFloor.room_used(state, hour)
+	_floor_node = null
+	_grid_node = null
+	var tex := PaintedFloor.texture_for(hour)
+	if tex == null:
+		return  # no painting: the plain floor tiles show
+	var grid := Vector2i(grid_w, grid_h)
+	var origin := Vector3(-grid_w * CELL / 2.0, 0.0, -grid_h * CELL / 2.0)
+	var cells := PaintedFloor.painted_cells(state, hour)
+	var floor_mesh := PaintedFloor.floor_mesh(cells, grid, PaintedFloor.cover_uv_rect(tex.get_size(), grid), origin, CELL)
+	if floor_mesh != null:
+		_floor_node = _mesh(floor_mesh, Vector3.ZERO, _floor_material)
+		_floor_node.name = "PaintedFloor"
+	if _floor_used:
+		var lines := PaintedFloor.grid_mesh(PaintedFloor.grid_edges(cells), origin, CELL)
+		if lines != null:
+			_grid_node = _mesh(lines, Vector3.ZERO, PaintedFloor.grid_material(COLORS["floor_grid"]))
+			_grid_node.name = "FloorGrid"
+			_grid_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## The painted floor and its grid from the last refresh (null if none).
+func painted_floor() -> MeshInstance3D:
+	return _floor_node
+
+
+func floor_grid() -> MeshInstance3D:
+	return _grid_node
+
+
+## The painted floor's current {brightness, saturation}.
+func floor_look_shown() -> Dictionary:
+	return _floor_look_shown.duplicate()
 
 
 func _draw_terrain(tile: String, slot: Vector2i) -> void:
