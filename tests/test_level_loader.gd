@@ -73,7 +73,6 @@ func test_l01_meta() -> bool:
 	check_eq(meta["spirit_mood"], "amused", "spirit_mood")
 	check_eq(meta["mood_weights"], {"amused": 0.6, "annoyed": 0.2, "triumphant": 0.2}, "mood_weights")
 	check_eq(meta["par_actions"], 10, "par_actions")
-	check_eq(meta["spirit_lines"]["on_burn"], "Oh, that was fun.", "spirit line")
 	return true
 
 
@@ -213,4 +212,15 @@ func test_reports_every_problem_at_once() -> bool:
 	var result := Loader.load_dict(data)
 	var lines: PackedStringArray = result["error"].split("\n")
 	check_eq(lines.size(), 3, "three problems, one line each (got: %s)" % result["error"])
+	return true
+
+
+func test_stray_spirit_lines_field_is_tolerated() -> bool:
+	# spirit_lines is no longer part of the level format (lines come from
+	# dialogue/lines.json), but an old level file that still has it must load.
+	var data := _minimal()
+	data["spirit_lines"] = {"on_burn": "Oh, that was fun.", "on_solve": "You're no fun when you win."}
+	var result := Loader.load_dict(data)
+	check_eq(result["error"], "", "loads without errors")
+	check(result["state"] != null, "state created")
 	return true

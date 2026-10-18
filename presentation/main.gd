@@ -12,12 +12,15 @@ const LevelList := preload("res://presentation/level_list.gd")
 const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
 const SpiritDirectorScript := preload("res://presentation/spirit_director.gd")
 const FxQueueScript := preload("res://presentation/fx_queue.gd")
+const SpiritFlashScript := preload("res://presentation/spirit_flash.gd")
+const SpiritLaughScript := preload("res://presentation/spirit_laugh.gd")
 const Progress := preload("res://presentation/menus/progress.gd")
 const MainMenuScript := preload("res://presentation/menus/main_menu.gd")
 const LevelSelectScript := preload("res://presentation/menus/level_select.gd")
 const PauseMenuScript := preload("res://presentation/menus/pause_menu.gd")
 const CreditsScript := preload("res://presentation/menus/credits.gd")
 const MenuStyle := preload("res://presentation/menus/menu_style.gd")
+const GameUiScript := preload("res://ui/game_ui.gd")
 
 ## What the screen is doing. Game input reaches the controller only in PLAYING.
 const MODE_MENU := "menu"                  # main menu over the clock
@@ -61,6 +64,19 @@ const FEEDBACK_FADE := 0.5
 ## The HUD (status, hint, controls) fades out during the ripple shot.
 const HUD_FADE_TIME := 0.15
 
+## HUD font sizes, offsets and outlines at 720p; apply_hud_scale() multiplies
+## them by the window scale (like the menus) so the HUD reads at 1080p too.
+const HUD_LAYOUT := {
+	"message": {"font": 28, "outline": 8},
+	"hint": {"font": 14, "offset_left": 16, "offset_bottom": -12},
+	"speech_mood": {"font": 13, "offset_top": 14},
+	"speech": {"font": 22, "offset_left": -540, "offset_right": 540, "offset_top": 32, "outline": 6},
+	"status": {"font": 15, "offset_left": 16, "offset_top": 12},
+	"context": {"font": 17, "offset_left": 16, "offset_top": 112},
+	"feedback": {"font": 20, "offset_bottom": -64, "outline": 6},
+	"return_button": {"font": 22, "offset_top": 78, "offset_bottom": 118},
+}
+
 ## Spirit speech placeholder (ui/ can replace it by listening to spirit_said):
 ## stays SPEECH_MIN_TIME s, longer for long lines, then fades.
 const SPEECH_MIN_TIME := 3.5
@@ -88,6 +104,8 @@ var clock: Node3D
 var bus: Node
 var ripple: Node3D
 var director: Node
+var flash: Node3D
+var laugh: Node3D
 ## Id of the level being played ("" before the first load) and its meta.
 var level_id := ""
 var level_meta := {}
@@ -119,16 +137,21 @@ var progress_path := Progress.PATH
 var progress := {}
 var level_ids: Array = []
 var _menu_layer: CanvasLayer
+## The in-game UI from ui/ (HUD, dialogue box, win / fail panel, ending screen).
+var game_ui: Control
 var _hud_layer: CanvasLayer
 var _open_menu: Control = null
 var _return_button: Button
 ## True once the ending choice was made: Enter returns to the main menu.
 var _ending_done := false
+## The HUD's current font scale (see apply_hud_scale).
+var hud_scale := 1.0
 ## True when the next redraw should tween passed-hour grades (an hour passed).
 var _animate_grades := false
 
 
 func _ready() -> void:
+	_set_content_scale()
 	_build_world()
 	clock = ClockLayoutScript.new()
 	clock.name = "Clock"
@@ -160,12 +183,25 @@ func _ready() -> void:
 	ripple.ripple_started.connect(func(): bus.ripple_started.emit())
 	ripple.ripple_finished.connect(func(): bus.ripple_finished.emit())
 
+	# The spirit's flight: a streak carries the ash along the camera's path.
+	flash = SpiritFlashScript.new()
+	flash.name = "SpiritFlash"
+	add_child(flash)
+	ripple.flight_started.connect(flash.launch)
+	ripple.ripple_finished.connect(flash.finish)
+
 	# The fire spirit: which trigger speaks when (lines come from dialogue/).
 	director = SpiritDirectorScript.new()
 	director.name = "SpiritDirector"
 	director.connect_bus(bus)
 	director.connect_ripple(ripple)
 	add_child(director)
+	# Her laugh on every ash_moved, from the landing room; a line waits for it.
+	laugh = SpiritLaughScript.new()
+	laugh.name = "SpiritLaugh"
+	laugh.setup(bus, func(): return controller.current_state())
+	add_child(laugh)
+	director.laugh = laugh
 
 	# Passed hours tween to their new grade; shadows rise and dissipate.
 	fx.blocker = ripple
@@ -705,16 +741,28 @@ func _build_ui() -> void:
 	_menu_layer.layer = 10  # menus above the HUD
 	add_child(_menu_layer)
 
+	# The new UI (ui/) replaces the old text labels. The labels stay as an
+	# unrendered holder: their text and flags are still what the earlier tests
+	# (and refresh logic) read, but ui/ is what the player sees.
+	var legacy := Control.new()
+	legacy.name = "LegacyLabels"
+	legacy.visible = false
+	layer.add_child(legacy)
+	game_ui = GameUiScript.new()
+	game_ui.name = "GameUi"
+	layer.add_child(game_ui)
+	game_ui.setup(bus, controller, REJECTION_MESSAGES, context_hint,
+		func(): return LevelList.next_of(level_id) != null)
+	game_ui.next_requested.connect(_on_next_requested)
+
 	# After the ending: a clickable way back too (Enter also works).
 	_return_button = MenuStyle.button("Return to main menu", 1.0)
-	_return_button.theme = MenuStyle.theme(1.0)
-	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_return_button.offset_top = -150
-	_return_button.offset_bottom = -110
+	# Just under the centered ending message, clear of the 6 o'clock room.
+	_return_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_return_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_return_button.visible = false
 	_return_button.pressed.connect(show_main_menu)
-	layer.add_child(_return_button)
+	legacy.add_child(_return_button)
 
 	_message = Label.new()
 	# Centered over the dial hub, the one empty spot between the rooms.
@@ -722,75 +770,98 @@ func _build_ui() -> void:
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_message.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_message.add_theme_constant_override("outline_size", 8)
 	_message.add_theme_color_override("font_outline_color", BACKGROUND)
-	_message.add_theme_font_size_override("font_size", 28)
 	_message.add_theme_color_override("font_color", RoomViewScript.COLORS["sun_marker"])
 	_message.visible = false
-	layer.add_child(_message)
+	legacy.add_child(_message)
 
 	_hint = Label.new()
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_hint.offset_left = 16
-	_hint.offset_bottom = -12
 	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_hint.add_theme_font_size_override("font_size", 14)
 	_hint.add_theme_color_override("font_color", TEXT_COLOR)
 	_hint.text = CONTROLS_TEXT
-	layer.add_child(_hint)
+	legacy.add_child(_hint)
 
 	# Spirit speech (placeholder): a small mood tag over the line, top center.
 	_speech_mood = Label.new()
 	_speech_mood.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_speech_mood.offset_top = 14
 	_speech_mood.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_speech_mood.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_speech_mood.add_theme_font_size_override("font_size", 13)
 	_speech_mood.add_theme_color_override("font_color", TEXT_COLOR)
 	_speech_mood.visible = false
-	layer.add_child(_speech_mood)
+	legacy.add_child(_speech_mood)
 	_speech = Label.new()
 	_speech.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_speech.offset_left = -540
-	_speech.offset_right = 540
-	_speech.offset_top = 32
 	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_speech.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_speech.add_theme_font_size_override("font_size", 22)
 	_speech.add_theme_color_override("font_color", HINT_COLOR)
-	_speech.add_theme_constant_override("outline_size", 6)
 	_speech.add_theme_color_override("font_outline_color", BACKGROUND)
 	_speech.visible = false
-	layer.add_child(_speech)
+	legacy.add_child(_speech)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_status.offset_left = 16
-	_status.offset_top = 12
-	_status.add_theme_font_size_override("font_size", 15)
 	_status.add_theme_color_override("font_color", TEXT_COLOR)
-	layer.add_child(_status)
+	legacy.add_child(_status)
 
 	# Just under the four status lines.
 	_context = Label.new()
 	_context.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_context.offset_left = 16
-	_context.offset_top = 112
-	_context.add_theme_font_size_override("font_size", 17)
 	_context.add_theme_color_override("font_color", HINT_COLOR)
 	_context.visible = false
-	layer.add_child(_context)
+	legacy.add_child(_context)
 
 	# Bottom center, above the controls text.
 	_feedback = Label.new()
 	_feedback.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_feedback.offset_bottom = -64
 	_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_feedback.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_feedback.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_feedback.add_theme_font_size_override("font_size", 20)
 	_feedback.add_theme_color_override("font_color", HINT_COLOR)
-	_feedback.add_theme_constant_override("outline_size", 6)
 	_feedback.add_theme_color_override("font_outline_color", BACKGROUND)
 	_feedback.visible = false
-	layer.add_child(_feedback)
+	legacy.add_child(_feedback)
+
+	_on_viewport_resized()
+	get_viewport().size_changed.connect(_on_viewport_resized)
+
+
+## The UI is designed for 1920x1080: scale the canvas to the window, keeping aspect.
+func _set_content_scale() -> void:
+	var window := get_window()
+	if window == null:
+		return
+	window.content_scale_size = GameUiScript.DESIGN_SIZE
+	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+
+
+func _on_next_requested() -> void:
+	var target = LevelList.next_of(level_id)
+	if target != null and mode == MODE_PLAYING:
+		load_entry(target)
+
+
+func _on_viewport_resized() -> void:
+	apply_hud_scale(MenuStyle.scale_for(get_viewport().get_visible_rect().size.y))
+
+
+## Sets every HUD font size, offset and outline from HUD_LAYOUT at `scale`
+## (1.0 at 720p, 1.5 at 1080p, the same factor the menus use).
+func apply_hud_scale(scale: float) -> void:
+	hud_scale = scale
+	var nodes := {
+		"message": _message, "hint": _hint, "speech_mood": _speech_mood, "speech": _speech,
+		"status": _status, "context": _context, "feedback": _feedback, "return_button": _return_button,
+	}
+	for key in HUD_LAYOUT:
+		var node: Control = nodes[key]
+		var spec: Dictionary = HUD_LAYOUT[key]
+		node.add_theme_font_size_override("font_size", int(spec["font"] * scale))
+		for side in ["offset_left", "offset_right", "offset_top", "offset_bottom"]:
+			if spec.has(side):
+				node.set(side, spec[side] * scale)
+		if spec.has("outline"):
+			node.add_theme_constant_override("outline_size", int(spec["outline"] * scale))
+	_return_button.theme = MenuStyle.theme(scale)
+	_return_button.custom_minimum_size = Vector2(320, 0) * scale

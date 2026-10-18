@@ -42,6 +42,8 @@ const COLORS := {
 	"fire": Color(1.00, 0.45, 0.05),         # THE warm accent. Only fire.
 	"fire_speck": Color(1.00, 0.50, 0.15),   # tiny embers left in burned remains
 	"fire_crack": Color(1.00, 0.42, 0.10),   # thin glowing cracks in an ash path
+	"fire_streak": Color(1.00, 0.60, 0.18),  # hot core of the spirit's flying streak
+	"fire_trail": Color(1.00, 0.40, 0.06),   # the ember trail behind the streak
 }
 
 ## Emission strength for fire details, shadow tips and markers.

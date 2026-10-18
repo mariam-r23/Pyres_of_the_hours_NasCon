@@ -31,6 +31,12 @@ const TRIGGER_PRIORITY := [
 	"on_burn", "on_ash_moved", "on_undo",
 ]
 
+## When a trigger has both voiced lines (audio/voice/cinder_<id>.mp3) and
+## unvoiced ones for the current act and mood, a voiced one is chosen this
+## percent of the time (a seeded draw, so it is reproducible).
+const VOICED_PERCENT := 85
+const VOICE_DIR := "res://audio/voice/"
+
 ## Seconds without input (while playing) before the spirit says on_idle once.
 const IDLE_SECONDS := 20.0
 
@@ -45,8 +51,10 @@ const REVEAL_LEVEL_ID := "L09_the_fuel"
 ## with no fitting line says nothing.
 
 ## Every decision, for diagnostics and tests:
-## {trigger, mood, text, tier, repeated, source} with source "lines" (a line
-## from lines.json) or "none" (nothing fits, nothing is said).
+## {trigger, mood, line_mood, text, tier, repeated, source}: mood is the
+## picker's chosen mood, line_mood the mood the line was written in (they
+## differ on tier 1 / 3 picks). source is "lines" (a line from lines.json)
+## or "none" (nothing fits, nothing is said).
 signal line_picked(result: Dictionary)
 
 var bus: Node = null
@@ -71,6 +79,11 @@ var _level_over := false
 var _idle_time := 0.0
 var _idle_said := false
 
+## Something with line_wait() -> float (spirit_laugh.gd): a line waits for her laugh.
+var laugh: Object = null
+
+var _deliver_token := 0
+static var _voiced_cache: Dictionary = {}
 static var _lines_cache: Array = []
 static var _config_cache: Dictionary = {}
 
@@ -168,10 +181,12 @@ func say(trigger: String) -> Dictionary:
 	if picker == null:
 		return {}
 	var r: Dictionary = picker.say(trigger, ctx)
-	var result := {"trigger": trigger, "mood": r["mood"], "text": "", "tier": r["tier"],
-		"repeated": r["repeated"], "source": "none"}
+	r = prefer_voiced(r, trigger)
+	var result := {"trigger": trigger, "mood": r["mood"], "line_mood": "", "text": "",
+		"tier": r["tier"], "repeated": r["repeated"], "source": "none"}
 	if not (r["line"] as Dictionary).is_empty():
 		result["text"] = str(r["line"]["text"])
+		result["line_mood"] = str(r["line"].get("mood", r["mood"]))
 		result["source"] = "lines"
 	line_picked.emit(result)
 	if result["text"] != "":
@@ -183,8 +198,22 @@ func say(trigger: String) -> Dictionary:
 
 
 func _deliver(result: Dictionary) -> void:
-	if bus != null:
-		bus.spirit_said.emit(result["trigger"], result["mood"], result["text"])
+	if bus == null:
+		return
+	# A line never starts on top of her laugh: it waits until the laugh is over.
+	var wait: float = laugh.line_wait() if laugh != null else 0.0
+	if wait > 0.0 and is_inside_tree():
+		var token := _deliver_token
+		get_tree().create_timer(wait).timeout.connect(func():
+			if token == _deliver_token:
+				_emit_said(result))
+		return
+	_emit_said(result)
+
+
+func _emit_said(result: Dictionary) -> void:
+	# The line's own mood, so the tag always matches how the line reads.
+	bus.spirit_said.emit(result["trigger"], result["line_mood"], result["text"])
 
 
 func _on_ripple_finished() -> void:
@@ -200,6 +229,7 @@ func _on_ripple_finished() -> void:
 ## Undo, restart and level load: drop the waiting line and the ending prompt.
 func _on_reset() -> void:
 	_pending = {}
+	_deliver_token += 1
 	_level_over = false
 	ending_pending = false
 	note_activity()
@@ -239,6 +269,45 @@ func choose_ending(choice: String) -> void:
 		return
 	ending_pending = false
 	say(ENDING_TRIGGERS[choice])
+
+
+# --- Voiced lines preferred ---------------------------------------------------
+
+## True if audio/voice/cinder_<line id>.mp3 exists.
+static func is_voiced(line_id: String) -> bool:
+	if not _voiced_cache.has(line_id):
+		_voiced_cache[line_id] = ResourceLoader.exists("%scinder_%s.mp3" % [VOICE_DIR, line_id])
+	return _voiced_cache[line_id]
+
+
+## The picker chose `r` (a say() result). With VOICED_PERCENT chance we want a
+## voiced line, otherwise an unvoiced one; if the choice is the other kind and
+## a fresh line of the wanted kind exists for the same trigger, act and mood,
+## it replaces it. The draw is seeded from the level and the picker's call
+## count, so it is reproducible. The picker's no-repeat memory is updated, and
+## a line said recently is never swapped in.
+func prefer_voiced(r: Dictionary, trigger: String) -> Dictionary:
+	var line: Dictionary = r["line"]
+	if line.is_empty():
+		return r
+	var rng = Picker.Rng.new(Picker.seed_from_string("%s#voice#%d" % [level_id, picker.calls]))
+	var roll: int = rng.next_u32()
+	var want_voiced: bool = roll % 100 < VOICED_PERCENT
+	if is_voiced(str(line["id"])) == want_voiced:
+		return r
+	var pool: Array = []
+	for l in picker.lines:
+		if l.get("trigger") == trigger and int(l.get("act", 1)) == int(ctx["act"]) \
+				and l.get("mood") == r["mood"] and is_voiced(str(l["id"])) == want_voiced \
+				and not (l["id"] in picker.recent):
+			pool.append(l)
+	if pool.is_empty():
+		return r
+	pool.sort_custom(func(a, b): return str(a["id"]) < str(b["id"]))
+	var pick: Dictionary = pool[(roll / 100) % pool.size()]
+	if not picker.recent.is_empty() and picker.recent[picker.recent.size() - 1] == line["id"]:
+		picker.recent[picker.recent.size() - 1] = pick["id"]
+	return {"mood": r["mood"], "line": pick, "tier": 0, "repeated": false}
 
 
 static func _load_dialogue() -> void:

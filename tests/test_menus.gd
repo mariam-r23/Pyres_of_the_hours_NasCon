@@ -243,3 +243,31 @@ func test_after_the_ending_return_to_the_main_menu() -> bool:
 	check(not main._ending_done, "cleared")
 	_free_main(main)
 	return true
+
+
+func test_level_select_row_columns() -> bool:
+	var entries := LevelList.all()
+	if entries.size() < 2:
+		return true
+	var ids: Array = entries.map(func(e): return e["id"])
+	var rows := LevelSelectScript.build_rows(entries, Progress.record_win(Progress.fresh(ids), ids[0], 12, ids))
+	check(rows[0]["left"].begins_with("1   "), "left column: number and title (%s)" % rows[0]["left"])
+	check_eq(rows[0]["right"], "12 / par %d" % rows[0]["par"], "right column: best / par")
+	if rows.size() > 2:
+		check_eq(rows[2]["right"], "locked", "right column: locked")
+	return true
+
+
+func test_hud_scales_with_the_window() -> bool:
+	var main := _main()
+	main.apply_hud_scale(1.0)
+	var small: int = main._status.get_theme_font_size("font_size")
+	main.apply_hud_scale(1.5)  # 1080p
+	check_eq(main._status.get_theme_font_size("font_size"), int(small * 1.5), "status text 1.5x at 1080p")
+	check_eq(main._speech.get_theme_font_size("font_size"), int(main.HUD_LAYOUT["speech"]["font"] * 1.5), "speech text scales")
+	check_eq(main._feedback.get_theme_font_size("font_size"), int(main.HUD_LAYOUT["feedback"]["font"] * 1.5), "feedback text scales")
+	check_eq(main._hint.get_theme_font_size("font_size"), int(main.HUD_LAYOUT["hint"]["font"] * 1.5), "controls text scales")
+	check(is_equal_approx(main._context.offset_top, main.HUD_LAYOUT["context"]["offset_top"] * 1.5), "positions scale too")
+	check(is_equal_approx(main.hud_scale, 1.5), "hud_scale recorded")
+	_free_main(main)
+	return true

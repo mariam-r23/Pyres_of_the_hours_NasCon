@@ -183,10 +183,13 @@ func test_empty_pick_says_nothing_and_ignores_level_spirit_lines() -> bool:
 	check_eq(result["source"], "none", "nothing fits")
 	check_eq(result["text"], "", "no text")
 	check_eq(env["said"], [], "an empty pick says nothing")
-	# L01's own spirit_lines (on_burn, on_solve) are not used either.
+	_free(env)
+	# A level's spirit_lines for a trigger that has lines are not used either.
+	meta["spirit_lines"] = {"on_burn": "A per-level burn line that must not be used."}
+	env = _setup("L01_first_crate", meta)
 	_action(env, [BURNED])
 	check_eq(env["said"].size(), 1, "on_burn is said")
-	check(env["said"][0][2] != _l01_meta()["spirit_lines"]["on_burn"], "from lines.json, not the level file")
+	check(env["said"][0][2] != meta["spirit_lines"]["on_burn"], "from lines.json, not the level file")
 	_free(env)
 	return true
 
@@ -278,4 +281,42 @@ func test_hud_changed_after_undo() -> bool:
 	}, "hud after undo")
 	main.get_parent().remove_child(main)
 	main.free()
+	return true
+
+
+## A (trigger, act, mood) the picker allows but no line is written in, so a
+## say() falls back to tier 1. Found from the live lines.json, because Mariam
+## fills gaps over time; {} if every allowed mood is covered.
+func _find_tier_1_case() -> Dictionary:
+	var lines: Array = JSON.parse_string(FileAccess.get_file_as_string(DirectorScript.LINES_PATH))["lines"]
+	var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DirectorScript.CONFIG_PATH))
+	var written := {}  # "trigger|act" -> moods with lines
+	for l in lines:
+		var key := "%s|%d" % [l["trigger"], int(l["act"])]
+		if not written.has(key):
+			written[key] = []
+		written[key].append(l["mood"])
+	var keys := written.keys()
+	keys.sort()
+	for key in keys:
+		var act := int(key.get_slice("|", 1))
+		for mood in config["allowed_moods"].get(str(act), []):
+			if not written[key].has(mood):
+				return {"trigger": key.get_slice("|", 0), "act": act, "mood": mood}
+	return {}
+
+
+func test_mood_tag_is_the_lines_own_mood_on_a_tier_1_pick() -> bool:
+	var case := _find_tier_1_case()
+	if case.is_empty():
+		return true  # every allowed mood has lines: no tier 1 fallback exists to test
+	# A level that only ever picks `mood` for a trigger with no line in that mood.
+	var meta := {"act": case["act"], "spirit_mood": case["mood"], "mood_weights": {case["mood"]: 1.0}}
+	var env := _setup("L01_first_crate", meta)
+	var result: Dictionary = env["director"].say(case["trigger"])
+	check_eq(result["tier"], 1, "a tier 1 pick (%s)" % str(case))
+	check_eq(result["mood"], case["mood"], "the picker chose %s" % case["mood"])
+	check(result["line_mood"] != case["mood"], "the line was written in another mood (%s)" % result["line_mood"])
+	check_eq(env["said"][0][1], result["line_mood"], "spirit_said carries the line's own mood")
+	_free(env)
 	return true

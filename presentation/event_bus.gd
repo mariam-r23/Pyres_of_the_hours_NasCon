@@ -27,7 +27,8 @@ signal level_load_failed(errors: Array)
 signal level_restarted
 
 # --- Spirit dialogue, ending and HUD (presentation; ui/ listens to these) ---
-## The fire spirit says a line (one per action at most).
+## The fire spirit says a line (one per action at most). mood is the mood the
+## line was written in (lines.json), even when the picker fell back a tier.
 signal spirit_said(trigger: String, mood: String, text: String)
 ## The last level was won: ui/ should show the ending choice.
 signal ending_choice_requested(level_id: String)
