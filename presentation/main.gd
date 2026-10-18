@@ -189,6 +189,11 @@ func _ready() -> void:
 	add_child(flash)
 	ripple.flight_started.connect(flash.launch)
 	ripple.ripple_finished.connect(flash.finish)
+	# She flies as the level's mood; undo, restart and a load leave nothing of her behind.
+	bus.level_loaded.connect(func(meta): flash.set_mood(str(meta.get("spirit_mood", "amused"))))
+	for signal_name in ["undo_done", "level_loaded"]:
+		bus.connect(signal_name, func(_arg): flash.clear())
+	bus.level_restarted.connect(flash.clear)
 
 	# The fire spirit: which trigger speaks when (lines come from dialogue/).
 	director = SpiritDirectorScript.new()
