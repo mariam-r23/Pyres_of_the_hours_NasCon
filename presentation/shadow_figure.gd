@@ -16,7 +16,7 @@ extends Node3D
 
 ## Base billboard size (tiles): a bit wider than a body, about a tile tall.
 const BASE_SIZE := Vector2(1.0, 1.0)
-const POOL_SIZE := 1.05
+const POOL_SIZE := 1.5
 ## Per-variant scale and tint (mixed into the body color).
 const VARIANTS := [
 	{"scale": 0.88, "tint": Color(0.03, 0.015, 0.05)},
@@ -24,8 +24,10 @@ const VARIANTS := [
 	{"scale": 1.08, "tint": Color(0.035, 0.012, 0.03)},
 ]
 ## glow_level, opacity and drift speed for each state.
-const DORMANT := {"glow": 0.15, "opacity": 0.38, "speed": 0.15, "breathing": 0.0}
-const ACTIVE := {"glow": 1.0, "opacity": 1.0, "speed": 0.6, "breathing": 1.0}
+## size multiplies BASE_SIZE and POOL_SIZE: an active shadow stands about two tiles
+## tall (clearly taller than the player, filling most of its cell), a dormant one 1.5.
+const DORMANT := {"glow": 0.15, "opacity": 0.38, "speed": 0.15, "breathing": 0.0, "size": 1.5}
+const ACTIVE := {"glow": 1.0, "opacity": 1.0, "speed": 0.6, "breathing": 1.0, "size": 2.0}
 ## Seconds the destroyed figure takes to break apart.
 const DISSOLVE_TIME := 0.6
 
@@ -36,7 +38,7 @@ render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled, blend_m
 uniform vec3 body_color : source_color = vec3(0.03, 0.02, 0.07);
 uniform vec3 ember_color : source_color = vec3(0.45, 0.12, 0.05);
 uniform vec3 rim_color : source_color = vec3(0.62, 0.72, 0.88);
-uniform float rim_strength = 0.2;
+uniform float rim_strength = 0.45;
 uniform float glow_level = 1.0;
 uniform float opacity = 1.0;
 uniform float speed = 0.6;
@@ -114,7 +116,7 @@ void fragment() {
 	float ember = (eyes * eye_out + (cracks + tips) * (1.0 - dissolve)) * glow_level * pulse;
 
 	vec3 col = body_color + rim_color * edge * rim_strength;
-	ALBEDO = col + ember_color * ember * 2.2;
+	ALBEDO = col + ember_color * ember * 4.0;
 	ALPHA = clamp(body * opacity + eyes * eye_out * glow_level * opacity, 0.0, 1.0);
 }
 """
@@ -255,6 +257,8 @@ func set_active(is_active: bool) -> void:
 		mat.set_shader_parameter("opacity", look["opacity"])
 		mat.set_shader_parameter("speed", look["speed"])
 	_body_mat.set_shader_parameter("breathing", look["breathing"])
+	body.scale = Vector3.ONE * float(look["size"])
+	pool.scale = Vector3.ONE * float(look["size"])
 
 
 ## Destroyed: break apart over DISSOLVE_TIME, then free this node. (Outside the

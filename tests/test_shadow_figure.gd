@@ -104,3 +104,23 @@ func test_a_ghost_outside_the_tree_is_freed_at_once() -> bool:
 	RoomViewScript.dissipate_ghost(figure)
 	check(not is_instance_valid(figure), "no tree, no animation: freed immediately")
 	return true
+
+
+func test_shadows_are_big_and_the_player_has_a_lantern() -> bool:
+	check(ShadowFigure.ACTIVE["size"] * ShadowFigure.BASE_SIZE.y >= 1.8, "an active shadow stands about two tiles tall")
+	check(ShadowFigure.DORMANT["size"] < ShadowFigure.ACTIVE["size"], "a dormant one is smaller")
+	var figure: Node3D = ShadowFigure.new()
+	figure.setup("sh_1", true, RoomViewScript.COLORS)
+	check(is_equal_approx(figure.body.scale.y, ShadowFigure.ACTIVE["size"]), "active size applied")
+	figure.set_active(false)
+	check(is_equal_approx(figure.body.scale.y, ShadowFigure.DORMANT["size"]), "dormant size applied")
+	figure.free()
+	var s := _state_with_shadow(12)
+	var room: Node3D = RoomViewScript.new()
+	room.refresh(s, 12)
+	check(room.find_child("PlayerLantern", true, false) != null, "the player carries a lantern")
+	check(room.find_child("PlayerLight", true, false) != null, "that lights the cell")
+	var lantern: Color = RoomViewScript.COLORS["player_lantern"]
+	check(lantern.s < 0.25 and lantern.v > 0.9, "pale warm-white, not fire orange")
+	room.free()
+	return true

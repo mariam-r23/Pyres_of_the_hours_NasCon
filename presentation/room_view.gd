@@ -40,6 +40,7 @@ const COLORS := {
 	"shadow_pool": Color(0.01, 0.01, 0.02),  # the dark smoke pool under a shadow
 	"player": Color(0.10, 0.11, 0.13),
 	"player_ring": Color(0.75, 0.85, 0.95),  # pale ring at the player's feet
+	"player_lantern": Color(1.0, 0.94, 0.84), # pale warm-white light over the player (never a shadow)
 	"active_room": Color(0.32, 0.38, 0.48),  # rim under the room the player is in
 	"sun_marker": Color(0.80, 0.86, 0.92),   # cold pale dial hand
 	"dial": Color(0.20, 0.22, 0.26),         # dark steel
@@ -82,6 +83,12 @@ const SPECK_SPOTS := [Vector2(0.37, 0.1), Vector2(-0.31, -0.22), Vector2(0.06, 0
 ## so the remains stay visible around the player's feet.
 const RING_RADII := Vector2(0.3, 0.4)
 const RING_RADII_ON_MOUND := Vector2(0.26, 0.31)
+## The player's lantern: a small glowing orb over the head and the light it casts.
+const LANTERN_HEIGHT := 1.15
+const LANTERN_RADIUS := 0.09
+const LANTERN_ENERGY := 3.0
+const LANTERN_LIGHT_ENERGY := 1.2
+const LANTERN_LIGHT_RANGE := 2.2
 ## Ash path cracks: (x, z, angle in degrees, length).
 const CRACKS := [Vector4(-0.12, -0.1, 25, 0.55), Vector4(0.14, 0.12, -40, 0.5), Vector4(0.0, 0.25, 80, 0.3)]
 
@@ -602,6 +609,20 @@ func _draw_player(state: GameStateScript, hour: int) -> void:
 	ring.inner_radius = ring_radii.x
 	ring.outer_radius = ring_radii.y
 	_mesh(ring, slot_to_position(slot) + Vector3(0, floor_y + 0.03, 0), _material(COLORS["player_ring"], COLORS["player_ring"], 0.8, false))
+	# A small warm-white lantern over the head, so the player never reads as a shadow.
+	var orb := SphereMesh.new()
+	orb.radius = LANTERN_RADIUS
+	orb.height = LANTERN_RADIUS * 2.0
+	var lantern := _mesh(orb, slot_to_position(slot) + Vector3(0, floor_y + LANTERN_HEIGHT, 0),
+		_material(COLORS["player_lantern"], COLORS["player_lantern"], LANTERN_ENERGY, false))
+	lantern.name = "PlayerLantern"
+	var light := OmniLight3D.new()
+	light.name = "PlayerLight"
+	light.light_color = COLORS["player_lantern"]
+	light.light_energy = LANTERN_LIGHT_ENERGY
+	light.omni_range = LANTERN_LIGHT_RANGE
+	light.position = lantern.position
+	_content.add_child(light)
 
 
 func _box(size: Vector3, pos: Vector3, color_key: String) -> void:
