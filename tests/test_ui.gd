@@ -55,8 +55,6 @@ func test_dial_lit_ticks_and_highlight() -> bool:
 
 func test_paths() -> bool:
 	check_eq(DialogueBox.voice_path("a1_burn_01"), "res://audio/voice/cinder_a1_burn_01.mp3", "voice path")
-	check_eq(DialogueBox.laugh_path(2), "res://audio/voice/cinder_laugh_act2_01.mp3", "laugh path")
-	check_eq(DialogueBox.laugh_path(9), "res://audio/voice/cinder_laugh_act3_01.mp3", "laugh path clamps")
 	for mood in ["amused", "annoyed", "menacing", "triumphant"]:
 		var path := DialogueBox.portrait_path(mood)
 		check_eq(path, "res://art/portraits/spirit_portrait_%s.jpeg" % mood, "portrait for " + mood)

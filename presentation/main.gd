@@ -12,6 +12,8 @@ const LevelList := preload("res://presentation/level_list.gd")
 const RippleCameraScript := preload("res://presentation/ripple_camera.gd")
 const SpiritDirectorScript := preload("res://presentation/spirit_director.gd")
 const FxQueueScript := preload("res://presentation/fx_queue.gd")
+const SpiritFlashScript := preload("res://presentation/spirit_flash.gd")
+const SpiritLaughScript := preload("res://presentation/spirit_laugh.gd")
 const Progress := preload("res://presentation/menus/progress.gd")
 const MainMenuScript := preload("res://presentation/menus/main_menu.gd")
 const LevelSelectScript := preload("res://presentation/menus/level_select.gd")
@@ -102,6 +104,8 @@ var clock: Node3D
 var bus: Node
 var ripple: Node3D
 var director: Node
+var flash: Node3D
+var laugh: Node3D
 ## Id of the level being played ("" before the first load) and its meta.
 var level_id := ""
 var level_meta := {}
@@ -179,12 +183,25 @@ func _ready() -> void:
 	ripple.ripple_started.connect(func(): bus.ripple_started.emit())
 	ripple.ripple_finished.connect(func(): bus.ripple_finished.emit())
 
+	# The spirit's flight: a streak carries the ash along the camera's path.
+	flash = SpiritFlashScript.new()
+	flash.name = "SpiritFlash"
+	add_child(flash)
+	ripple.flight_started.connect(flash.launch)
+	ripple.ripple_finished.connect(flash.finish)
+
 	# The fire spirit: which trigger speaks when (lines come from dialogue/).
 	director = SpiritDirectorScript.new()
 	director.name = "SpiritDirector"
 	director.connect_bus(bus)
 	director.connect_ripple(ripple)
 	add_child(director)
+	# Her laugh on every ash_moved, from the landing room; a line waits for it.
+	laugh = SpiritLaughScript.new()
+	laugh.name = "SpiritLaugh"
+	laugh.setup(bus, func(): return controller.current_state())
+	add_child(laugh)
+	director.laugh = laugh
 
 	# Passed hours tween to their new grade; shadows rise and dissipate.
 	fx.blocker = ripple

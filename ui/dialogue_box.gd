@@ -7,7 +7,8 @@ extends Control
 ## on_fail, on_idle, and the act 3 ones). It never blocks input.
 ##
 ## Voice: audio/voice/cinder_<line id>.mp3, only for the 18 priority lines; every
-## other line is text only. Laughs: audio/voice/cinder_laugh_act<N>_01.mp3.
+## other line is text only. Her laugh (every ash_moved) is spirit_laugh.gd, and a
+## line waits for it there, so it never starts on top of the laugh.
 ## Every file is optional: nothing here fails when one is missing.
 
 const UiTheme := preload("res://ui/ui_theme.gd")
@@ -50,7 +51,6 @@ var text_label: Label
 var portrait_rect: TextureRect
 var silhouette: Control
 var voice_player: AudioStreamPlayer
-var laugh_player: AudioStreamPlayer
 ## What is on screen: the current line, how long it has been up and its timings.
 var current_line_id := ""
 var current_mood := DEFAULT_MOOD
@@ -82,10 +82,6 @@ func setup(new_bus: Node) -> void:
 
 static func voice_path(line_id: String) -> String:
 	return "%scinder_%s.mp3" % [VOICE_DIR, line_id]
-
-
-static func laugh_path(for_act: int) -> String:
-	return "%scinder_laugh_act%d_01.mp3" % [VOICE_DIR, clampi(for_act, 1, 3)]
 
 
 ## art/portraits/spirit_portrait_<mood>.jpeg; an unknown mood uses the default.
@@ -156,12 +152,6 @@ func show_line(trigger: String, mood: String, text: String) -> bool:
 		voice_player.play()
 	else:
 		gate["last_text_at"] = now
-		# A text-only ash line gets the act's laugh, but never on top of a voice line.
-		if trigger == "on_ash_moved" and now >= float(gate["voice_until"]):
-			var laugh: AudioStream = _audio(laugh_path(act))
-			if laugh != null:
-				laugh_player.stream = laugh
-				laugh_player.play()
 	_apply_portrait(current_mood)
 	name_label.text = SPIRIT_NAME
 	mood_label.text = current_mood
@@ -205,7 +195,6 @@ func advance(delta: float) -> void:
 
 func _stop_audio() -> void:
 	voice_player.stop()
-	laugh_player.stop()
 
 
 func _now() -> float:
@@ -313,6 +302,3 @@ func _build() -> void:
 	voice_player = AudioStreamPlayer.new()
 	voice_player.name = "VoicePlayer"
 	add_child(voice_player)
-	laugh_player = AudioStreamPlayer.new()
-	laugh_player.name = "LaughPlayer"
-	add_child(laugh_player)
