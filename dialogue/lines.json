@@ -561,6 +561,83 @@
       "mood": "menacing",
       "act": 3,
       "text": "Burn them out if you like. Somebody still has to remember them."
+    },
+    {
+      "id": "a3_ignite_04",
+      "trigger": "on_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Another hour in my hands, Keeper. Careful. I never learned to put things down."
+    },
+    {
+      "id": "a3_ash_04",
+      "trigger": "on_ash_moved",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Ash goes where I carry it, Keeper. Everything does, in the end."
+    },
+    {
+      "id": "a3_solve_04",
+      "trigger": "on_solve",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Neat work, Keeper. Every hour you keep is one more I burn."
+    },
+    {
+      "id": "a3_undo_04",
+      "trigger": "on_undo",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Rewind again, Keeper. The hours remember. So do I."
+    },
+    {
+      "id": "a3_idle_04",
+      "trigger": "on_idle",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Still thinking, Keeper? The wick doesn't wait. Only I do."
+    },
+    {
+      "id": "a3_fail_04",
+      "trigger": "on_fail",
+      "mood": "menacing",
+      "act": 3,
+      "text": "The last hour, Keeper. You kept it beautifully. Then it was mine."
+    },
+    {
+      "id": "a3_destroy_04",
+      "trigger": "on_shadow_destroyed",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Quiet now. They'll be back, Keeper. Ash always finds its hour."
+    },
+    {
+      "id": "a3_shadow_04",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "There they are, Keeper. Every hour you spent, standing up."
+    },
+    {
+      "id": "a3_shadow_05",
+      "trigger": "on_shadow_appeared",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Don't look away. They're only the days you kept, Keeper."
+    },
+    {
+      "id": "a3_burnend_03",
+      "trigger": "on_ending_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Hold still, Keeper. The last hour is always the warmest."
+    },
+    {
+      "id": "a3_burnend_04",
+      "trigger": "on_ending_burn",
+      "mood": "menacing",
+      "act": 3,
+      "text": "Watch it fall, Keeper. This is how every hour wanted to end."
     }
   ]
 }
