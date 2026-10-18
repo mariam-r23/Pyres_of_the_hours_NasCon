@@ -18,6 +18,7 @@ const LevelSelectScript := preload("res://presentation/menus/level_select.gd")
 const PauseMenuScript := preload("res://presentation/menus/pause_menu.gd")
 const CreditsScript := preload("res://presentation/menus/credits.gd")
 const MenuStyle := preload("res://presentation/menus/menu_style.gd")
+const GameUiScript := preload("res://ui/game_ui.gd")
 
 ## What the screen is doing. Game input reaches the controller only in PLAYING.
 const MODE_MENU := "menu"                  # main menu over the clock
@@ -132,6 +133,8 @@ var progress_path := Progress.PATH
 var progress := {}
 var level_ids: Array = []
 var _menu_layer: CanvasLayer
+## The in-game UI from ui/ (HUD, dialogue box, win / fail panel, ending screen).
+var game_ui: Control
 var _hud_layer: CanvasLayer
 var _open_menu: Control = null
 var _return_button: Button
@@ -144,6 +147,7 @@ var _animate_grades := false
 
 
 func _ready() -> void:
+	_set_content_scale()
 	_build_world()
 	clock = ClockLayoutScript.new()
 	clock.name = "Clock"
@@ -720,6 +724,20 @@ func _build_ui() -> void:
 	_menu_layer.layer = 10  # menus above the HUD
 	add_child(_menu_layer)
 
+	# The new UI (ui/) replaces the old text labels. The labels stay as an
+	# unrendered holder: their text and flags are still what the earlier tests
+	# (and refresh logic) read, but ui/ is what the player sees.
+	var legacy := Control.new()
+	legacy.name = "LegacyLabels"
+	legacy.visible = false
+	layer.add_child(legacy)
+	game_ui = GameUiScript.new()
+	game_ui.name = "GameUi"
+	layer.add_child(game_ui)
+	game_ui.setup(bus, controller, REJECTION_MESSAGES, context_hint,
+		func(): return LevelList.next_of(level_id) != null)
+	game_ui.next_requested.connect(_on_next_requested)
+
 	# After the ending: a clickable way back too (Enter also works).
 	_return_button = MenuStyle.button("Return to main menu", 1.0)
 	# Just under the centered ending message, clear of the 6 o'clock room.
@@ -727,7 +745,7 @@ func _build_ui() -> void:
 	_return_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_return_button.visible = false
 	_return_button.pressed.connect(show_main_menu)
-	layer.add_child(_return_button)
+	legacy.add_child(_return_button)
 
 	_message = Label.new()
 	# Centered over the dial hub, the one empty spot between the rooms.
@@ -738,14 +756,14 @@ func _build_ui() -> void:
 	_message.add_theme_color_override("font_outline_color", BACKGROUND)
 	_message.add_theme_color_override("font_color", RoomViewScript.COLORS["sun_marker"])
 	_message.visible = false
-	layer.add_child(_message)
+	legacy.add_child(_message)
 
 	_hint = Label.new()
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_hint.add_theme_color_override("font_color", TEXT_COLOR)
 	_hint.text = CONTROLS_TEXT
-	layer.add_child(_hint)
+	legacy.add_child(_hint)
 
 	# Spirit speech (placeholder): a small mood tag over the line, top center.
 	_speech_mood = Label.new()
@@ -754,7 +772,7 @@ func _build_ui() -> void:
 	_speech_mood.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_speech_mood.add_theme_color_override("font_color", TEXT_COLOR)
 	_speech_mood.visible = false
-	layer.add_child(_speech_mood)
+	legacy.add_child(_speech_mood)
 	_speech = Label.new()
 	_speech.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -762,19 +780,19 @@ func _build_ui() -> void:
 	_speech.add_theme_color_override("font_color", HINT_COLOR)
 	_speech.add_theme_color_override("font_outline_color", BACKGROUND)
 	_speech.visible = false
-	layer.add_child(_speech)
+	legacy.add_child(_speech)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_status.add_theme_color_override("font_color", TEXT_COLOR)
-	layer.add_child(_status)
+	legacy.add_child(_status)
 
 	# Just under the four status lines.
 	_context = Label.new()
 	_context.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_context.add_theme_color_override("font_color", HINT_COLOR)
 	_context.visible = false
-	layer.add_child(_context)
+	legacy.add_child(_context)
 
 	# Bottom center, above the controls text.
 	_feedback = Label.new()
@@ -785,10 +803,26 @@ func _build_ui() -> void:
 	_feedback.add_theme_color_override("font_color", HINT_COLOR)
 	_feedback.add_theme_color_override("font_outline_color", BACKGROUND)
 	_feedback.visible = false
-	layer.add_child(_feedback)
+	legacy.add_child(_feedback)
 
 	_on_viewport_resized()
 	get_viewport().size_changed.connect(_on_viewport_resized)
+
+
+## The UI is designed for 1920x1080: scale the canvas to the window, keeping aspect.
+func _set_content_scale() -> void:
+	var window := get_window()
+	if window == null:
+		return
+	window.content_scale_size = GameUiScript.DESIGN_SIZE
+	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+
+
+func _on_next_requested() -> void:
+	var target = LevelList.next_of(level_id)
+	if target != null and mode == MODE_PLAYING:
+		load_entry(target)
 
 
 func _on_viewport_resized() -> void:
