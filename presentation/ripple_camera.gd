@@ -37,9 +37,14 @@ const STOP_SKIPPED := "skipped"
 const STOP_CANCELLED := "cancelled"
 
 # --- Overview pose (where the camera rests) ---
-const OVERVIEW_POSITION := Vector3(0, 30, 17)
-const OVERVIEW_LOOK := Vector3(0, 0, 1.2)
+## Framed so the ring of rooms fills about 87% of a 16:9 screen's height while
+## staying out of the HUD zones (hud.gd reserved_rects); tests/test_layout.gd checks it.
+const OVERVIEW_POSITION := Vector3(0, 28.05, 13.08)
+const OVERVIEW_LOOK := Vector3(0, 0, 1.75)
 const FOV := 40.0
+## The aspect the framing is designed for. Narrower windows keep its width
+## (more room above and below); wider ones keep its height (more at the sides).
+const DESIGN_ASPECT := 16.0 / 9.0
 
 # --- Close poses: the camera sits at focus + offset, looking at the focus ---
 const ROOM_OFFSET := Vector3(0, 9.0, 6.0)      # framing one room
@@ -94,6 +99,8 @@ func _init() -> void:
 func _ready() -> void:
 	camera.current = true
 	_apply_pose(OVERVIEW_POSITION, OVERVIEW_LOOK)
+	_apply_lens()
+	get_viewport().size_changed.connect(_apply_lens)
 	if bus != null:
 		connect_bus(bus)
 
@@ -107,6 +114,25 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if consume_input(event):
 		get_viewport().set_input_as_handled()
+
+
+## Lens for a viewport aspect: {keep_aspect, fov}. At 16:9 or wider the vertical
+## field (FOV) is kept; narrower, the 16:9 horizontal field is kept instead, so
+## the ring never grows toward the HUD at the sides.
+static func lens_for_aspect(aspect: float) -> Dictionary:
+	if aspect >= DESIGN_ASPECT - 0.001:
+		return {"keep_aspect": Camera3D.KEEP_HEIGHT, "fov": FOV}
+	var horizontal := 2.0 * rad_to_deg(atan(tan(deg_to_rad(FOV / 2.0)) * DESIGN_ASPECT))
+	return {"keep_aspect": Camera3D.KEEP_WIDTH, "fov": horizontal}
+
+
+func _apply_lens() -> void:
+	var size := get_viewport().get_visible_rect().size
+	if size.y <= 0.0:
+		return
+	var lens := lens_for_aspect(size.x / size.y)
+	camera.keep_aspect = lens["keep_aspect"]
+	camera.fov = lens["fov"]
 
 
 func is_playing() -> bool:

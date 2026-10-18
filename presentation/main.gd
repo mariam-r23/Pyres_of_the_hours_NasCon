@@ -826,14 +826,16 @@ func _build_ui() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
-## The UI is designed for 1920x1080: scale the canvas to the window, keeping aspect.
+## The UI is designed for 1920x1080: scale the canvas to the window.
 func _set_content_scale() -> void:
 	var window := get_window()
 	if window == null:
 		return
 	window.content_scale_size = GameUiScript.DESIGN_SIZE
 	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+	# Expand: the canvas grows to the window's aspect (never below 1920x1080), and
+	# the anchored HUD follows the real edges instead of sitting in letterbox bars.
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 
 
 func _on_next_requested() -> void:
