@@ -11,6 +11,7 @@ extends Node3D
 const GameStateScript := preload("res://core/game_state.gd")
 const Sun := preload("res://core/sun.gd")
 const PaintedFloor := preload("res://presentation/painted_floor.gd")
+const ShadowFigure := preload("res://presentation/shadow_figure.gd")
 
 ## ALL colors live here so Noor can restyle in one place.
 ## Color rule: the world is cold (slate blue, ash gray). Only fire effects
@@ -34,8 +35,9 @@ const COLORS := {
 	"burnable_edge": Color(1.00, 0.93, 0.82, 0.55), # faint warm-white edge: "this burns"
 	"ash": Color(0.38, 0.37, 0.37),          # burned remains: light charcoal mound
 	"shadow_body": Color(0.03, 0.03, 0.04),
-	"shadow_body_dormant": Color(0.03, 0.03, 0.04, 0.4),  # see-through: not here yet
-	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange, dimmer than fire
+	"shadow_tip": Color(0.38, 0.11, 0.06),   # deep red-orange embers (eyes), dimmer than fire
+	"shadow_rim": Color(0.62, 0.72, 0.88),   # faint cold rim, so a shadow reads on the painted floor
+	"shadow_pool": Color(0.01, 0.01, 0.02),  # the dark smoke pool under a shadow
 	"player": Color(0.10, 0.11, 0.13),
 	"player_ring": Color(0.75, 0.85, 0.95),  # pale ring at the player's feet
 	"active_room": Color(0.32, 0.38, 0.48),  # rim under the room the player is in
@@ -51,8 +53,6 @@ const COLORS := {
 ## Emission strength for fire details, shadow tips and markers.
 const SPECK_ENERGY := 1.4
 const CRACK_ENERGY := 0.9
-const SHADOW_TIP_DORMANT_ENERGY := 0.2
-const SHADOW_TIP_ACTIVE_ENERGY := 2.5
 const EXIT_GLOW_ENERGY := 1.6
 const MARKER_ENERGY := 1.0
 const BURNABLE_EDGE_ENERGY := 0.6
@@ -106,8 +106,6 @@ const GRADE := {
 ## Shadow animations.
 const SHADOW_RISE_TIME := 0.3
 const SHADOW_RISE_START := Vector3(0.6, 0.05, 0.6)
-const SHADOW_DISSIPATE_TIME := 0.25
-const SHADOW_DISSIPATE_END := Vector3(0.35, 0.35, 0.35)
 
 var grid_w := GameStateScript.DEFAULT_GRID_SIZE
 var grid_h := GameStateScript.DEFAULT_GRID_SIZE
@@ -528,37 +526,15 @@ func _draw_cracks(top: Vector3) -> void:
 		node.rotation_degrees.y = crack.z
 
 
-## A shadow under its own pivot at floor level (so it can rise from the floor).
+## A shadow creature (shadow_figure.gd) with its origin on the floor, so the
+## rise animation grows it up out of the floor. Dormant until its hour passes.
 func _draw_shadow(sh: Dictionary, active: bool) -> void:
-	var pivot := Node3D.new()
-	pivot.position = slot_to_position(sh["slot"])
-	_content.add_child(pivot)
-	_shadow_nodes[sh["id"]] = pivot
+	var figure: Node3D = ShadowFigure.new()
+	figure.setup(sh["id"], active, COLORS)
+	figure.position = slot_to_position(sh["slot"])
+	_content.add_child(figure)
+	_shadow_nodes[sh["id"]] = figure
 	_shadow_slots[sh["id"]] = sh["slot"]
-	var body_color: Color = COLORS["shadow_body"] if active else COLORS["shadow_body_dormant"]
-	var energy := SHADOW_TIP_ACTIVE_ENERGY if active else SHADOW_TIP_DORMANT_ENERGY
-	_build_shadow_meshes(pivot, active,
-		_material(body_color, null, 0.0, false),
-		_material(COLORS["shadow_tip"], COLORS["shadow_tip"], energy, false))
-
-
-func _build_shadow_meshes(pivot: Node3D, active: bool, body_mat: Material, tip_mat: Material) -> void:
-	var body := CapsuleMesh.new()
-	body.radius = 0.22
-	body.height = 0.85
-	var body_node := MeshInstance3D.new()
-	body_node.mesh = body
-	body_node.material_override = body_mat
-	body_node.position = Vector3(0, 0.43, 0)
-	pivot.add_child(body_node)
-	var tip := SphereMesh.new()
-	tip.radius = 0.1 if active else 0.07
-	tip.height = tip.radius * 2.0
-	var tip_node := MeshInstance3D.new()
-	tip_node.mesh = tip
-	tip_node.material_override = tip_mat
-	tip_node.position = Vector3(0, 0.9, 0)
-	pivot.add_child(tip_node)
 
 
 ## The slot a shadow was drawn on in the last redraw, or (-1, -1).
@@ -580,47 +556,31 @@ func rise_shadow(id: String) -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-## A stand-in for a destroyed shadow, kept until it dissipates (it survives
-## redraws). Returns the node, or null if the slot is unknown.
-func add_shadow_ghost(slot: Vector2i) -> Node3D:
+## A stand-in for a destroyed shadow (the same creature, awake), kept until it
+## dissipates (it survives redraws). Returns the node, or null if the slot is unknown.
+func add_shadow_ghost(slot: Vector2i, id: String = "") -> Node3D:
 	if slot.x < 0:
 		return null
 	if _fx_root == null:
 		_fx_root = Node3D.new()
 		_fx_root.name = "Fx"
 		add_child(_fx_root)
-	var ghost := Node3D.new()
+	var ghost: Node3D = ShadowFigure.new()
+	ghost.setup(id, true, COLORS)
 	ghost.name = "ShadowGhost"
 	ghost.position = slot_to_position(slot)
 	_fx_root.add_child(ghost)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = COLORS["shadow_body"]
-	body_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	var tip_mat := StandardMaterial3D.new()
-	tip_mat.albedo_color = COLORS["shadow_tip"]
-	tip_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	tip_mat.emission_enabled = true
-	tip_mat.emission = COLORS["shadow_tip"]
-	tip_mat.emission_energy_multiplier = SHADOW_TIP_ACTIVE_ENERGY
-	_build_shadow_meshes(ghost, true, body_mat, tip_mat)
 	return ghost
 
 
-## Shrinks and fades a ghost, then frees it.
+## The smoke breaks apart and fades, the eyes go out last, then the ghost frees itself.
 static func dissipate_ghost(ghost: Node3D) -> void:
 	if ghost == null or not is_instance_valid(ghost):
 		return
 	if not ghost.is_inside_tree():
 		ghost.free()
 		return
-	var tween := ghost.create_tween().set_parallel(true)
-	tween.tween_property(ghost, "scale", SHADOW_DISSIPATE_END, SHADOW_DISSIPATE_TIME).set_ease(Tween.EASE_IN)
-	for child in ghost.get_children():
-		var mat: StandardMaterial3D = child.material_override
-		tween.tween_property(mat, "albedo_color:a", 0.0, SHADOW_DISSIPATE_TIME)
-		if mat.emission_enabled:
-			tween.tween_property(mat, "emission_energy_multiplier", 0.0, SHADOW_DISSIPATE_TIME)
-	tween.chain().tween_callback(ghost.queue_free)
+	ghost.start_dissolve()
 
 
 func _draw_player(state: GameStateScript, hour: int) -> void:

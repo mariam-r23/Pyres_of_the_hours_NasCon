@@ -649,7 +649,7 @@ func _on_ending_chosen(choice: String) -> void:
 ## (its slot from the last redraw) and let it dissipate.
 func _on_shadow_destroyed(event: Dictionary) -> void:
 	var room: Node3D = clock.room_for_hour(event["hour"])
-	var ghost: Node3D = room.add_shadow_ghost(room.last_shadow_slot(event["id"]))
+	var ghost: Node3D = room.add_shadow_ghost(room.last_shadow_slot(event["id"]), event["id"])
 	if ghost != null:
 		fx.push({"kind": "dissipate", "hour": event["hour"], "id": event["id"], "ghost": ghost})
 
