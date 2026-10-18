@@ -172,7 +172,7 @@ func test_cancel_stops_at_once() -> bool:
 	ripple.cancel()
 	check(not ripple.is_playing(), "cancelled")
 	check(ripple.camera.position.is_equal_approx(RippleScript.OVERVIEW_POSITION), "overview pose")
-	check(ripple.get_node_or_null("AshMote") == null, "mote removed")
+	check(ripple.get_node_or_null("Flash") == null, "no burn flash left behind")
 	ripple.free()
 	return true
 
@@ -219,9 +219,9 @@ func test_target_hidden_until_the_ember_lands() -> bool:
 	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "arrival hidden when the shot starts")
 	check_eq(ripple.hidden_slots(), {2: [Vector2i(2, 2)]}, "only the ash target is hidden")
 	check(not ripple.is_slot_hidden(12, Vector2i(2, 2)), "the burned source is not hidden")
-	ripple.advance(0.47)  # mid-glide (to_room 0.25 + beat 0.15, glide 0.14)
-	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "still hidden mid-glide")
-	ripple.advance(0.25)  # 0.72 s: landing done (0.66), holding
+	ripple.advance(0.47)  # mid-flight (to_room 0.15 + beat 0.10, flight 0.73)
+	check(ripple.is_slot_hidden(2, Vector2i(2, 2)), "still hidden mid-flight")
+	ripple.advance(0.55)  # 1.02 s: landed (0.98), holding
 	check(not ripple.is_slot_hidden(2, Vector2i(2, 2)), "revealed once the ember lands")
 	check_eq(env["log"]["revealed"], [[2, Vector2i(2, 2)]], "slot_revealed fired once")
 	check(ripple.is_playing(), "the hold is still part of the shot")
@@ -320,7 +320,7 @@ func test_main_mid_shot_source_shows_arrival_hidden() -> bool:
 	main._refresh()  # another redraw mid-shot must not un-hide it
 	check(target.object_node_at(Vector2i(2, 2)) == null, "still held back after a second redraw")
 	check(main.controller.current_state().objects.has("crate_a_ash"), "it exists in the state all along")
-	main.ripple.advance(0.75)
+	main.ripple.advance(1.2)
 	main._refresh()
 	check(target.object_node_at(Vector2i(2, 2)) != null, "visible once the ember lands")
 	_remove_main(main)
@@ -359,7 +359,6 @@ func test_shot_reads_as_travel() -> bool:
 	var total := RippleScript.total_duration(plan)
 	check(RippleScript.pose_at(plan, 0.0)["position"].is_equal_approx(RippleScript.OVERVIEW_POSITION), "pose_at starts at the overview")
 	check(RippleScript.pose_at(plan, total)["position"].is_equal_approx(RippleScript.OVERVIEW_POSITION), "pose_at ends at the overview")
-	check_eq(RippleScript.pose_at(plan, 0.3)["phase"], "beat", "0.30 s is in the beat")
-	check(RippleScript.MOTE_RADIUS >= 0.2, "a bigger ember")
-	check(RippleScript.TRAIL_COUNT >= 3, "with a trail")
+	check_eq(RippleScript.pose_at(plan, 0.2)["phase"], "beat", "0.20 s is in the beat")
+	check_eq(RippleScript.pose_at(plan, 0.5)["phase"], "glide", "0.50 s is in the flight")
 	return true

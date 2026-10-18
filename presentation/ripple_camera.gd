@@ -3,9 +3,10 @@ extends Node3D
 ##
 ## When the bus emits `burned` followed by `ash_moved` in the same action, the
 ## camera leaves the clock overview, eases to the burn hour's room, glides
-## around the clock (the short way, never through the hub) to the target hour,
-## holds on the tile where the ash landed, and returns. A small ember mote
-## rides along with the camera's focus. Under 1.5 s in total.
+## around the clock (the short way, never through the hub) to the target hour
+## while the spirit's streak flies the same path (spirit_flash.gd), holds on
+## the tile where the ash landed, and returns. Under 1.5 s in total. When the
+## burn and the landing are in the same room it is only a small push-in.
 ##
 ## The arriving ash object is held back: its target slot is "hidden" (the
 ## views skip drawing it) until the ember lands, then slot_revealed fires so
@@ -18,9 +19,13 @@ extends Node3D
 
 const RoomViewScript := preload("res://presentation/room_view.gd")
 const ClockLayoutScript := preload("res://presentation/clock_layout.gd")
+const SpiritFlashScript := preload("res://presentation/spirit_flash.gd")
 
 signal ripple_started
 signal ripple_finished
+## The spirit takes off: world start and end of the flight, seconds until it
+## leaves (the camera first settles on the burn) and how long it flies.
+signal flight_started(start: Vector3, end: Vector3, delay: float, duration: float)
 ## A held-back slot is visible again (pop it in after the next redraw).
 signal slot_revealed(hour: int, slot: Vector2i)
 ## The hidden set changed in any way (redraw needed).
@@ -40,24 +45,23 @@ const FOV := 40.0
 const ROOM_OFFSET := Vector3(0, 9.0, 6.0)      # framing one room
 const LANDING_OFFSET := Vector3(0, 6.0, 4.0)   # closer, on the landing tile
 
-# --- Timings (seconds). Worst case (a 180-degree glide) totals 1.54 s. ---
-const TO_ROOM_TIME := 0.25        # overview -> burn room (the burn flash plays)
-const BEAT_TIME := 0.15           # a beat on the burning object before leaving
-const GLIDE_TIME_PER_HOUR := 0.07 # per clock hour travelled (60 degrees = 2 hours)
-const LAND_TIME := 0.12           # target room -> landing tile
-const HOLD_TIME := 0.30           # rest on the landing tile (pop + puff, mote fades)
-const RETURN_TIME := 0.30         # back to the overview
+# --- Timings (seconds). The flight itself is 0.55 to 0.9 s (spirit_flash.gd);
+# the whole shot is at most 0.15 + 0.10 + 0.9 + 0.12 + 0.20 = 1.47 s. ---
+const TO_ROOM_TIME := 0.15        # overview -> burn room (the burn flash plays)
+const BEAT_TIME := 0.10           # a beat on the burning object before she leaves
+const HOLD_TIME := 0.12           # rest on the landing tile (pop + puff)
+const RETURN_TIME := 0.20         # back to the overview
 const ARC_SAMPLES_PER_HOUR := 2   # keyframes per clock hour along the arc
 
-# --- Ember mote, trail and flashes (placeholders for Noor's VFX) ---
-const MOTE_RADIUS := 0.2
-const MOTE_HEIGHT := 0.6
-const MOTE_ENERGY := 5.0
-const TRAIL_COUNT := 6            # fading copies behind the ember
-const TRAIL_SPACING := 0.03       # seconds of path between trail copies
+## Same-room shots: only a small push-in toward the room.
+const PUSH_IN_AMOUNT := 0.3
+const SAME_ROOM_LAND_OFFSET := Vector3(0, 13.0, 9.0)
+
+# --- Flashes (the streak itself is spirit_flash.gd) ---
 const FLASH_TIME := 0.35          # burn flash / landing puff duration
 const BURN_FLASH_SIZE := 1.1      # final radius of the burn flash
 const LANDING_PUFF_SIZE := 0.6
+const FLASH_ENERGY := 5.0
 
 ## Ease modes for a keyframe's segment.
 const EASE_IN_OUT := "in_out"
@@ -74,8 +78,6 @@ var _time := 0.0
 var _duration := 0.0
 var _playing := false
 var _pending_burn := {}
-var _mote: MeshInstance3D = null
-var _trail: Array = []    # MeshInstance3D copies behind the mote
 var _flashes: Array = []  # live burn flash / landing puff nodes
 ## hour -> Array of slots whose arriving object is held back.
 var _hidden := {}
@@ -141,7 +143,9 @@ func on_ash_moved(event: Dictionary) -> void:
 	if _playing:
 		skip()  # a new shot replaces the old one; reveal what it held
 	_hide(event["to_hour"], event["to_slot"])
+	var flight := flight_of(burn["hour"], event["to_hour"], event["to_slot"], grid_size, burn["slot"])
 	play(plan_shot(burn["hour"], event["to_hour"], event["to_slot"], grid_size, burn["slot"]))
+	flight_started.emit(flight["start"], flight["end"], flight["delay"], flight["duration"])
 
 
 # --- Held-back (hidden) slots ---
@@ -177,47 +181,62 @@ func _reveal_all() -> void:
 
 # --- Shot planning (pure, testable) ---
 
+## The spirit's flight for a burn at (from_hour, from_slot) and a landing at
+## (to_hour, to_slot): {start, end, delay, duration} in world space. The delay is
+## the time the camera needs to settle on the burn; the duration comes from the
+## distance (spirit_flash.gd flight_duration).
+static func flight_of(from_hour: int, to_hour: int, to_slot: Vector2i,
+		grid: Vector2i = Vector2i(5, 5), from_slot: Vector2i = Vector2i(-1, -1)) -> Dictionary:
+	var start := ClockLayoutScript.hour_to_room_position(from_hour)
+	if from_slot.x >= 0:
+		start += RoomViewScript.grid_slot_position(from_slot, grid)
+	var end := ClockLayoutScript.hour_to_room_position(to_hour) + RoomViewScript.grid_slot_position(to_slot, grid)
+	var distance := Vector2(start.x - end.x, start.z - end.z).length()
+	return {"start": start, "end": end, "delay": TO_ROOM_TIME + BEAT_TIME,
+		"duration": SpiritFlashScript.flight_duration(distance)}
+
+
 ## Keyframes for one shot. Each is { position, look_at, duration, ease, phase }:
 ## the camera moves from the previous keyframe to this one in `duration`
 ## seconds. The first and last keyframes are the overview pose.
-## Phases: "overview", "to_room", "glide", "land", "hold", "return".
-## from_hour == to_hour gives a push-in (no glide).
+## Phases: "overview", "to_room", "beat", "glide", "land", "hold", "return".
+## The glide keyframes sample the streak's ground path, so the camera focus
+## rides with her; the last one ("land") tightens onto the landing tile.
+## from_hour == to_hour gives a small push-in (no glide).
 static func plan_shot(from_hour: int, to_hour: int, to_slot: Vector2i,
 		grid: Vector2i = Vector2i(5, 5), from_slot: Vector2i = Vector2i(-1, -1)) -> Array:
-	var start_focus := ClockLayoutScript.hour_to_room_position(from_hour)
-	if from_slot.x >= 0:
-		start_focus += RoomViewScript.grid_slot_position(from_slot, grid)
-	var target_room := ClockLayoutScript.hour_to_room_position(to_hour)
-	var landing := target_room + RoomViewScript.grid_slot_position(to_slot, grid)
+	var flight := flight_of(from_hour, to_hour, to_slot, grid, from_slot)
+	var start_focus: Vector3 = flight["start"]
+	var landing: Vector3 = flight["end"]
+	var flight_time: float = flight["duration"]
 
 	var plan: Array = [_key(OVERVIEW_POSITION, OVERVIEW_LOOK, 0.0, LINEAR, "overview")]
+	if from_hour == to_hour:
+		var push_pos := OVERVIEW_POSITION.lerp(start_focus + ROOM_OFFSET, PUSH_IN_AMOUNT)
+		var push_look := OVERVIEW_LOOK.lerp(start_focus, PUSH_IN_AMOUNT)
+		plan.append(_key(push_pos, push_look, TO_ROOM_TIME, EASE_IN_OUT, "to_room"))
+		plan.append(_key(push_pos, push_look, BEAT_TIME, LINEAR, "beat"))
+		plan.append(_key(landing + SAME_ROOM_LAND_OFFSET, landing, flight_time, EASE_IN_OUT, "land"))
+		plan.append(_key(landing + SAME_ROOM_LAND_OFFSET, landing, HOLD_TIME, LINEAR, "hold"))
+		plan.append(_key(OVERVIEW_POSITION, OVERVIEW_LOOK, RETURN_TIME, EASE_IN_OUT, "return"))
+		return plan
+
 	plan.append(_key(start_focus + ROOM_OFFSET, start_focus, TO_ROOM_TIME, EASE_IN_OUT, "to_room"))
 	plan.append(_key(start_focus + ROOM_OFFSET, start_focus, BEAT_TIME, LINEAR, "beat"))
-
-	if from_hour != to_hour:
-		var a0 := ClockLayoutScript.hour_angle(from_hour)
-		# Shortest signed turn; exactly opposite hours go clockwise.
-		var turn := wrapf(ClockLayoutScript.hour_angle(to_hour) - a0, -PI, PI)
-		if is_equal_approx(absf(turn), PI):
-			turn = PI
-		var hours := absf(turn) / TAU * 12.0
-		var glide_time := hours * GLIDE_TIME_PER_HOUR
-		var samples := maxi(2, int(round(hours * ARC_SAMPLES_PER_HOUR)))
-		# Equal angle steps; easing is baked into the step times (sine
-		# ease-in-out), so linear playback between them is smooth.
-		var previous_time := 0.0
-		var radius := start_focus.length()
-		var end_radius := ClockLayoutScript.RADIUS
-		for k in range(1, samples + 1):
-			var s := float(k) / samples
-			var t := acos(1.0 - 2.0 * s) / PI * glide_time
-			var angle := a0 + turn * s
-			var r := lerpf(radius, end_radius, s)
-			var focus := Vector3(r * sin(angle), 0.0, -r * cos(angle))
-			plan.append(_key(focus + ROOM_OFFSET, focus, t - previous_time, LINEAR, "glide"))
-			previous_time = t
-
-	plan.append(_key(landing + LANDING_OFFSET, landing, LAND_TIME, EASE_IN_OUT, "land"))
+	var a0 := ClockLayoutScript.hour_angle(from_hour)
+	var turn := wrapf(ClockLayoutScript.hour_angle(to_hour) - a0, -PI, PI)
+	var hours := absf(turn) / TAU * 12.0
+	var samples := maxi(3, int(round(hours * ARC_SAMPLES_PER_HOUR)))
+	# Equal steps along the path; easing is baked into the step times (sine
+	# ease-in-out, the streak's own curve), so linear playback is smooth.
+	var previous_time := 0.0
+	for k in range(1, samples):
+		var s := float(k) / samples
+		var t := acos(1.0 - 2.0 * s) / PI * flight_time
+		var focus := SpiritFlashScript.ground_position(start_focus, landing, s)
+		plan.append(_key(focus + ROOM_OFFSET, focus, t - previous_time, LINEAR, "glide"))
+		previous_time = t
+	plan.append(_key(landing + LANDING_OFFSET, landing, flight_time - previous_time, LINEAR, "land"))
 	plan.append(_key(landing + LANDING_OFFSET, landing, HOLD_TIME, LINEAR, "hold"))
 	plan.append(_key(OVERVIEW_POSITION, OVERVIEW_LOOK, RETURN_TIME, EASE_IN_OUT, "return"))
 	return plan
@@ -271,7 +290,6 @@ func play(plan: Array) -> void:
 	_time = 0.0
 	_duration = total_duration(plan)
 	_playing = true
-	_spawn_mote()
 	if plan.size() > 1:
 		_spawn_flash(plan[1]["look_at"], BURN_FLASH_SIZE)  # the burn, on its tile
 	ripple_started.emit()
@@ -294,10 +312,9 @@ func advance(delta: float) -> void:
 		_spawn_flash(pose["look_at"], LANDING_PUFF_SIZE)
 		_reveal_all()
 	_apply_pose(pose["position"], pose["look_at"])
-	_update_mote(pose)
 
 
-## Skips the shot: overview pose at once, mote removed, arrival revealed.
+## Skips the shot: overview pose at once, arrival revealed.
 func skip() -> void:
 	_reveal_all()
 	if _playing:
@@ -329,7 +346,7 @@ func _stop(reason: String) -> void:
 	last_stop_reason = reason
 	_playing = false
 	_plan = []
-	_remove_mote()
+	_remove_flashes()
 	_apply_pose(OVERVIEW_POSITION, OVERVIEW_LOOK)
 	ripple_finished.emit()
 
@@ -340,7 +357,7 @@ func _apply_pose(pos: Vector3, look: Vector3) -> void:
 		camera.look_at(look)
 
 
-# --- Ember mote, trail and flashes (placeholders; Noor's VFX replaces these) ---
+# --- Burn flash and landing puff ---
 
 func _glow_material(alpha: float, energy: float) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -365,45 +382,11 @@ func _sphere_node(radius: float, mat: Material) -> MeshInstance3D:
 	return node
 
 
-func _spawn_mote() -> void:
-	_remove_mote()
-	_mote = _sphere_node(MOTE_RADIUS, _glow_material(1.0, MOTE_ENERGY))
-	_mote.name = "AshMote"
-	_mote.visible = false
-	for i in TRAIL_COUNT:
-		var fade := 1.0 - float(i + 1) / (TRAIL_COUNT + 1)
-		var ghost := _sphere_node(MOTE_RADIUS * (0.4 + 0.5 * fade), _glow_material(0.6 * fade, MOTE_ENERGY * fade))
-		ghost.visible = false
-		_trail.append(ghost)
-
-
-## The mote rises off the burning tile during the beat, rides the camera's
-## focus to the landing tile with a trail behind it, then fades in the hold.
-func _update_mote(pose: Dictionary) -> void:
-	if _mote == null:
-		return
-	var phase: String = pose["phase"]
-	var u: float = pose["u"]
-	_mote.visible = phase in ["beat", "glide", "land", "hold"]
-	var lift := MOTE_HEIGHT * u if phase == "beat" else MOTE_HEIGHT
-	_mote.position = pose["look_at"] + Vector3(0, lift, 0)
-	var alpha := 1.0 - u if phase == "hold" else 1.0
-	var mat: StandardMaterial3D = _mote.material_override
-	mat.albedo_color.a = alpha
-	mat.emission_energy_multiplier = MOTE_ENERGY * alpha
-	# Trail: where the ember was a moment ago, only while it travels.
-	var travelling := phase in ["glide", "land"]
-	for i in _trail.size():
-		var past := pose_at(_plan, _time - (i + 1) * TRAIL_SPACING)
-		_trail[i].visible = travelling and past["phase"] in ["beat", "glide", "land"]
-		_trail[i].position = past["look_at"] + Vector3(0, MOTE_HEIGHT, 0)
-
-
 ## A quick fire flash at `at` that grows to `size` and fades out.
 func _spawn_flash(at: Vector3, size: float) -> void:
 	if not is_inside_tree():
 		return
-	var mat := _glow_material(0.85, MOTE_ENERGY)
+	var mat := _glow_material(0.85, FLASH_ENERGY)
 	var flash := _sphere_node(size, mat)
 	flash.name = "Flash"
 	flash.position = at + Vector3(0, 0.3, 0)
@@ -422,13 +405,11 @@ func _free_flash(flash: Node) -> void:
 		flash.queue_free()
 
 
-func _remove_mote() -> void:
-	for node in [_mote] + _trail + _flashes:
+func _remove_flashes() -> void:
+	for node in _flashes:
 		if node != null and is_instance_valid(node):
 			if node.is_inside_tree():
 				node.queue_free()
 			else:
 				node.free()
-	_mote = null
-	_trail = []
 	_flashes = []
